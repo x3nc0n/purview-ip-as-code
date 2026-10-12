@@ -1,0 +1,371 @@
+{
+  "generatorVersion": "1.0.0",
+  "syntheticOnly": true,
+  "identifierFixture": "123-45-6789",
+  "identifierWarning": "This conventional example is synthetic and is not associated with a person. A plausible SSN-format value cannot be guaranteed never to have been issued. Live detector results must be observed in the target tenant.",
+  "countSemantics": "Occurrences in one item; repeated values are not unique people.",
+  "fixtures": [
+    {
+      "id": "bcsi-explicit",
+      "extractedTextPath": "demo/content/generated/bcsi-explicit.txt",
+      "expectedDetectionType": "bcsi-explicit-designation",
+      "expectedConfidence": 85,
+      "expectedSsnOccurrences": 0,
+      "expectedLabel": "highly-confidential-bes",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text",
+        "docx",
+        "pdf"
+      ],
+      "docxPath": "demo/content/generated/bcsi-explicit.docx",
+      "pdfPath": "demo/content/generated/bcsi-explicit.pdf"
+    },
+    {
+      "id": "bcsi-network",
+      "extractedTextPath": "demo/content/generated/bcsi-network.txt",
+      "expectedDetectionType": "bcsi-network-security",
+      "expectedConfidence": 85,
+      "expectedSsnOccurrences": 0,
+      "expectedLabel": "highly-confidential-bes",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text",
+        "docx",
+        "pdf"
+      ],
+      "docxPath": "demo/content/generated/bcsi-network.docx",
+      "pdfPath": "demo/content/generated/bcsi-network.pdf"
+    },
+    {
+      "id": "bcsi-access",
+      "extractedTextPath": "demo/content/generated/bcsi-access.txt",
+      "expectedDetectionType": "bcsi-access-procedures",
+      "expectedConfidence": 85,
+      "expectedSsnOccurrences": 0,
+      "expectedLabel": "highly-confidential-bes",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text",
+        "docx",
+        "pdf"
+      ],
+      "docxPath": "demo/content/generated/bcsi-access.docx",
+      "pdfPath": "demo/content/generated/bcsi-access.pdf"
+    },
+    {
+      "id": "control-public-standard",
+      "extractedTextPath": "demo/content/generated/control-public-standard.txt",
+      "expectedDetectionType": null,
+      "expectedConfidence": null,
+      "expectedSsnOccurrences": 0,
+      "expectedLabel": "none",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text"
+      ]
+    },
+    {
+      "id": "control-isolated-address",
+      "extractedTextPath": "demo/content/generated/control-isolated-address.txt",
+      "expectedDetectionType": null,
+      "expectedConfidence": null,
+      "expectedSsnOccurrences": 0,
+      "expectedLabel": "none",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text"
+      ]
+    },
+    {
+      "id": "control-generic-scada",
+      "extractedTextPath": "demo/content/generated/control-generic-scada.txt",
+      "expectedDetectionType": null,
+      "expectedConfidence": null,
+      "expectedSsnOccurrences": 0,
+      "expectedLabel": "none",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text"
+      ]
+    },
+    {
+      "id": "control-generic-credential",
+      "extractedTextPath": "demo/content/generated/control-generic-credential.txt",
+      "expectedDetectionType": null,
+      "expectedConfidence": null,
+      "expectedSsnOccurrences": 0,
+      "expectedLabel": "none",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text"
+      ]
+    },
+    {
+      "id": "control-quoted-designation",
+      "extractedTextPath": "demo/content/generated/control-quoted-designation.txt",
+      "expectedDetectionType": "bcsi-explicit-designation",
+      "expectedConfidence": 85,
+      "expectedSsnOccurrences": 0,
+      "expectedLabel": "highly-confidential-bes",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text"
+      ]
+    },
+    {
+      "id": "pii-spo-0",
+      "extractedTextPath": "demo/content/generated/pii-spo-0.txt",
+      "expectedDetectionType": null,
+      "expectedConfidence": null,
+      "expectedSsnOccurrences": 0,
+      "expectedLabel": "none",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text"
+      ]
+    },
+    {
+      "id": "pii-spo-1",
+      "extractedTextPath": "demo/content/generated/pii-spo-1.txt",
+      "expectedDetectionType": "us-ssn",
+      "expectedConfidence": null,
+      "expectedSsnOccurrences": 1,
+      "expectedLabel": "confidential-internal",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text",
+        "docx",
+        "pdf"
+      ],
+      "docxPath": "demo/content/generated/pii-spo-1.docx",
+      "pdfPath": "demo/content/generated/pii-spo-1.pdf"
+    },
+    {
+      "id": "pii-spo-198",
+      "extractedTextPath": "demo/content/generated/pii-spo-198.txt",
+      "expectedDetectionType": "us-ssn",
+      "expectedConfidence": null,
+      "expectedSsnOccurrences": 198,
+      "expectedLabel": "confidential-internal",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text"
+      ]
+    },
+    {
+      "id": "pii-spo-199",
+      "extractedTextPath": "demo/content/generated/pii-spo-199.txt",
+      "expectedDetectionType": "us-ssn",
+      "expectedConfidence": null,
+      "expectedSsnOccurrences": 199,
+      "expectedLabel": "confidential-internal",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text"
+      ]
+    },
+    {
+      "id": "pii-spo-200",
+      "extractedTextPath": "demo/content/generated/pii-spo-200.txt",
+      "expectedDetectionType": "us-ssn",
+      "expectedConfidence": null,
+      "expectedSsnOccurrences": 200,
+      "expectedLabel": "highly-confidential-internal",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text",
+        "docx",
+        "pdf"
+      ],
+      "docxPath": "demo/content/generated/pii-spo-200.docx",
+      "pdfPath": "demo/content/generated/pii-spo-200.pdf"
+    },
+    {
+      "id": "pii-spo-201",
+      "extractedTextPath": "demo/content/generated/pii-spo-201.txt",
+      "expectedDetectionType": "us-ssn",
+      "expectedConfidence": null,
+      "expectedSsnOccurrences": 201,
+      "expectedLabel": "highly-confidential-internal",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text"
+      ]
+    },
+    {
+      "id": "pii-spo-250",
+      "extractedTextPath": "demo/content/generated/pii-spo-250.txt",
+      "expectedDetectionType": "us-ssn",
+      "expectedConfidence": null,
+      "expectedSsnOccurrences": 250,
+      "expectedLabel": "highly-confidential-internal",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text"
+      ]
+    },
+    {
+      "id": "pii-exchange-200",
+      "extractedTextPath": "demo/content/generated/pii-exchange-200.txt",
+      "expectedDetectionType": "us-ssn",
+      "expectedConfidence": null,
+      "expectedSsnOccurrences": 200,
+      "expectedLabel": "highly-confidential-recipients",
+      "workload": "Exchange",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text"
+      ]
+    },
+    {
+      "id": "mixed-pii-199-bcsi",
+      "extractedTextPath": "demo/content/generated/mixed-pii-199-bcsi.txt",
+      "expectedDetectionType": "bcsi-explicit-designation",
+      "expectedConfidence": 85,
+      "expectedSsnOccurrences": 199,
+      "expectedLabel": "highly-confidential-bes",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text"
+      ]
+    },
+    {
+      "id": "mixed-pii-200-bcsi",
+      "extractedTextPath": "demo/content/generated/mixed-pii-200-bcsi.txt",
+      "expectedDetectionType": "bcsi-explicit-designation",
+      "expectedConfidence": 85,
+      "expectedSsnOccurrences": 200,
+      "expectedLabel": "highly-confidential-bes",
+      "workload": "SharePoint",
+      "expectedProtection": {
+        "status": "expected-only-not-observed",
+        "preserveManualLabels": true
+      },
+      "observedPurviewCount": null,
+      "liveValidationStatus": "not-run",
+      "syntheticOnly": true,
+      "formats": [
+        "text"
+      ]
+    }
+  ]
+}

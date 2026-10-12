@@ -1,0 +1,21 @@
+# Architecture
+
+## Source of truth
+
+`config/labels.json`, `config/publishing-policies.json`, `config/detection.json`, and `config/auto-labeling-policies.json` are the canonical definitions. JSON Schema and semantic PowerShell validation run offline. The custom BCSI sensitive-information types are compiled deterministically to Unicode UTF-16 XML with stable declared IDs, matching Microsoft's custom SIT package guidance. The XML is a package input, not proof that a tenant accepted or evaluated the rules.
+
+Service-side detection is deliberately split into independent families. The BCSI family creates a separate single-SIT rule for each 85-confidence contextual detector and targets only Highly Confidential / BES, so a match on any detector is sufficient without relying on multi-condition OR semantics. The PII family uses the built-in US SSN type with per-item occurrence thresholds and does not depend on, exclude, or escalate with BCSI. The 1-199 band is represented as a minimum count of 1 with an exception at 200; the 200+ band is an independent rule. Auto-label policy priority follows the target label priority, so BCSI's 240 outranks the PII escalation label priority 220/230 when policies overlap. `OverwriteLabel` is explicitly false; Microsoft's documented behavior for this setting is Exchange-only. Tenant-specific evaluation, ordering, and manual-label preservation still require test evidence.
+
+The optional scanner is a separate discovery-only adapter. Its resource-group Bicep modules create a private VNet, private DNS, Azure Files private endpoint and dedicated share, Key Vault private endpoint, user-assigned managed identity, and non-Core Windows Server VM. The VM has no public IP. A protected custom-script extension verifies the released bootstrap hash; bootstrap checks pinned installer hashes and Microsoft Authenticode signatures, resumes safely after installer restart codes, and records distinct readiness fields. Scanner rules that set sensitivity labels are intentionally not written because the public cmdlet surface has no verified label-condition writer.
+
+## Trust and mutation boundaries
+
+- Pull-request CI runs offline schema, fixture, PowerShell, XML, and Bicep checks; it has read-only repository permissions and no Azure or Purview credential.
+- Service-side apply returns a plan by default. Explicit `-Apply` requires an explicit tenant overlay, runtime cmdlet capability checks, and a tenant-scoped ownership inventory. It reconciles labels, the custom SIT package, and simulation-mode auto-label policies/rules; it reports label publishing as blocked because the documented `New-LabelPolicy` cmdlet cannot target the configured recipient audience safely.
+- Each created object ID is persisted immediately in the ownership inventory. Existing name collisions outside that inventory are not adopted, drifted policy/rule definitions fail before writes, and the adapter never deletes objects.
+- Activation requires an approval record plus operator attestation that a named simulation run verified manual-label preservation. The script validates all owned policies/rules before changing their mode, but the attestation and cmdlet result are not independent evidence of runtime tenant behavior.
+- Scanner Azure deployment is never part of CI. The workflow is manual, defaults to an existing resource group, uses OIDC, and is gated by a GitHub environment that repository administrators must configure with required reviewers.
+- Scanner app credentials are submitted as a secure Bicep parameter and stored in Key Vault. The VM identity can read the secret and retrieve the dedicated storage-account key. The key is retained only in the scanner service account's Windows Credential Manager profile; no key or app secret is written to bootstrap parameters or readiness output.
+- The template secures storage and Key Vault behind private endpoints, disables public network access, and creates no public RDP/SMB endpoint. Outbound HTTPS is allowed for pinned vendor packages and Microsoft service connectivity.
+
+See [scanner operations](../extensions/scanner/README.md), [protection gaps](protection-gaps.md), and [prerequisites](prerequisites.md) for operator-facing limitations.

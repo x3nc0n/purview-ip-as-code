@@ -1,0 +1,3 @@
+Synthetic lab topology note.
+BES enclave firewall subnet 192.0.2.14 uses a documented deny rule for the test VLAN.
+Ingress and egress behavior is invented and is not operational guidance.

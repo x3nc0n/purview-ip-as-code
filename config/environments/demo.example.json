@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "environment": "demo-example",
+  "tenant": {
+    "id": "00000000-0000-0000-0000-000000000000",
+    "labelScheme": "detect"
+  },
+  "ownership": {
+    "managedLabelKeys": [
+      "public",
+      "non-business",
+      "general",
+      "confidential",
+      "confidential-any-user",
+      "confidential-internal",
+      "confidential-recipients",
+      "highly-confidential",
+      "highly-confidential-any-user",
+      "highly-confidential-internal",
+      "highly-confidential-recipients",
+      "highly-confidential-bes"
+    ],
+    "managedPolicyKeys": [
+      "demo-publishing",
+      "bcsi-spo-high",
+      "bcsi-od-high",
+      "bcsi-exchange-high",
+      "pii-spo-low",
+      "pii-spo-high",
+      "pii-od-low",
+      "pii-od-high",
+      "pii-exchange-low",
+      "pii-exchange-high"
+    ]
+  },
+  "groups": [
+    {
+      "key": "bes-authorized",
+      "id": "00000000-0000-0000-0000-000000000000",
+      "email": "bes-authorized@example.invalid",
+      "purpose": "bes-authorized"
+    },
+    {
+      "key": "internal-only-audience",
+      "id": "00000000-0000-0000-0000-000000000000",
+      "email": "internal-audience@example.invalid",
+      "purpose": "internal-only-audience"
+    }
+  ],
+  "audience": {
+    "key": "demo-pilot",
+    "id": "00000000-0000-0000-0000-000000000000"
+  },
+  "scopes": {
+    "sharePointLocations": [],
+    "oneDriveLocations": [],
+    "exchangeLocations": []
+  },
+  "features": {
+    "encryptBes": true,
+    "publishingPolicy": true,
+    "activationRequiresApproval": true
+  }
+}

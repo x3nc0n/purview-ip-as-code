@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Approved scanner lab infrastructure plan",
+  "type": "object",
+  "required": ["schemaVersion", "meta", "deployment", "network", "security", "resources", "acceptance"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "enum": [1] },
+    "meta": {
+      "type": "object",
+      "required": ["name", "status", "scope", "purpose"],
+      "properties": {
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["approved"] },
+        "scope": { "type": "string", "enum": ["resourceGroup"] },
+        "purpose": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "deployment": {
+      "type": "object",
+      "required": ["location", "existingResourceGroup", "subscriptionTargetAuthorized"],
+      "properties": {
+        "location": { "type": "string" },
+        "existingResourceGroup": { "type": "boolean" },
+        "subscriptionTargetAuthorized": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "network": {
+      "type": "object",
+      "required": ["addressSpace", "vmSubnet", "privateEndpointSubnet", "publicIp", "inboundRdp", "inboundSmb", "filePrivateDns"],
+      "properties": {
+        "addressSpace": { "type": "string" },
+        "vmSubnet": { "type": "string" },
+        "privateEndpointSubnet": { "type": "string" },
+        "publicIp": { "type": "boolean" },
+        "inboundRdp": { "type": "boolean" },
+        "inboundSmb": { "type": "boolean" },
+        "filePrivateDns": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "security": {
+      "type": "object",
+      "required": ["storageDedicated", "storagePublicAccess", "keyVaultRbac", "keyVaultPurgeProtection", "credentialOutputs", "managedIdentity"],
+      "properties": {
+        "storageDedicated": { "type": "boolean" },
+        "storagePublicAccess": { "type": "boolean" },
+        "keyVaultRbac": { "type": "boolean" },
+        "keyVaultPurgeProtection": { "type": "boolean" },
+        "credentialOutputs": { "type": "boolean" },
+        "managedIdentity": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "resources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "apiVersion", "purpose"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string" },
+          "apiVersion": { "type": "string" },
+          "purpose": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "required": ["defaultMode", "scannerReadinessRequiresScan", "activationRequiresSeparateApproval", "liveDeploymentTested"],
+      "properties": {
+        "defaultMode": { "type": "string", "enum": ["discovery"] },
+        "scannerReadinessRequiresScan": { "type": "boolean" },
+        "activationRequiresSeparateApproval": { "type": "boolean" },
+        "liveDeploymentTested": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

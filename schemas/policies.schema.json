@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Auto-label policy definitions",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "required": ["key", "family", "name", "workload", "targetLabelKey", "mode", "conditions"],
+    "properties": {
+      "key": { "type": "string" },
+      "family": { "type": "string", "enum": ["bcsi", "pii"] },
+      "name": { "type": "string" },
+      "workload": { "type": "string", "enum": ["SharePoint", "OneDrive", "Exchange", "Scanner"] },
+      "targetLabelKey": { "type": "string" },
+      "mode": { "type": "string", "enum": ["TestWithoutNotifications", "Enforce"] },
+      "conditions": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "required": ["sitKey", "minCount", "minConfidence"],
+          "properties": {
+            "sitKey": { "type": "string" },
+            "minCount": { "type": "integer", "minimum": 1 },
+            "maxCount": { "type": ["integer", "null"], "minimum": 1 },
+            "minConfidence": { "type": "integer", "enum": [65, 75, 85] }
+          },
+          "additionalProperties": false
+        }
+      },
+      "protectionAction": { "type": "string", "enum": ["apply-label", "do-not-forward"] },
+      "notes": { "type": "string" }
+    },
+    "additionalProperties": false
+  }
+}

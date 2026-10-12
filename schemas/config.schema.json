@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Purview label definitions",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+        "type": "object",
+        "required": ["key", "name", "tier", "parent", "protection"],
+        "properties": {
+          "key": { "type": "string", "pattern": "^[a-z][a-z0-9-]+$" },
+          "name": { "type": "string", "minLength": 1 },
+          "tier": { "type": "integer", "minimum": 0 },
+          "parent": { "type": ["string", "null"] },
+          "priority": { "type": "integer", "minimum": 0 },
+          "description": { "type": "string" },
+          "protection": {
+            "type": "object",
+            "required": ["mode"],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": ["none", "user-defined", "fixed-group"]
+              },
+              "rights": {
+                "type": "array",
+                "items": { "type": "string" },
+                "uniqueItems": true
+              },
+              "groupKey": { "type": ["string", "null"] },
+              "offlineAccessDays": { "type": ["integer", "null"], "minimum": 1 },
+              "contentExpiration": { "type": ["string", "null"] },
+              "encrypt": { "type": "boolean" },
+              "doNotForward": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+    "additionalProperties": false
+  }
+}

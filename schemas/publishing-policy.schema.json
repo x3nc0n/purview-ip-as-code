@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Purview publishing policy",
+  "type": "object",
+  "required": ["schemaVersion", "policyKey", "name", "audienceKey", "defaultLabelKey", "mandatory", "requireDowngradeJustification"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "enum": [1] },
+    "policyKey": { "type": "string" },
+    "name": { "type": "string" },
+    "audienceKey": { "type": "string" },
+    "defaultLabelKey": { "type": "string" },
+    "mandatory": { "type": "boolean" },
+    "requireDowngradeJustification": { "type": "boolean" },
+    "outlook": {
+      "type": "object",
+      "properties": {
+        "showPrompt": { "type": "boolean" },
+        "defaultLabel": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

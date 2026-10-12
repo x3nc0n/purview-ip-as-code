@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "package": {
+    "id": "2439f4bb-f00c-5c0e-8a73-1ba7048bc146",
+    "publisherId": "d8a8e7c1-3f7a-56ec-9e68-bf920bf671d3",
+    "name": "Purview IP as code - illustrative BCSI",
+    "version": "1.0.0.0"
+  },
+  "proximityCharacters": 300,
+  "detectors": [
+    {
+      "key": "bcsi-explicit-designation",
+      "name": "BCSI Explicit Designation",
+      "entityId": "69b9e6b5-5fb1-5a0e-8f58-6b29df3b27f2",
+      "rationale": "Finds the repository's deliberately structured internal-demo designation. It does not infer legal BCSI status or public availability.",
+      "primary": "Structured BCSI internal-demo designation",
+      "supporting": ["BES Cyber System Information handling statement"],
+      "patterns": [
+        { "confidence": 65, "primaryRegex": "\\bBCSI\\b", "supportRegexes": ["\\bINTERNAL\\s+DEMO\\s+DESIGNATION\\b"] },
+        { "confidence": 75, "primaryRegex": "\\bBCSI\\s*[:=-]\\s*INTERNAL\\s+DEMO\\s+DESIGNATION\\b", "supportRegexes": ["\\bHandling\\s*:\\s*BES\\s+Cyber\\s+System\\s+Information\\b"] },
+        { "confidence": 85, "primaryRegex": "\\bBCSI\\s*[:=-]\\s*INTERNAL\\s+DEMO\\s+DESIGNATION\\b", "supportRegexes": [] }
+      ]
+    },
+    {
+      "key": "bcsi-network-security",
+      "name": "BCSI Network and Security Configuration",
+      "entityId": "ec6bbbc6-42e8-50db-98cf-0e14b4ad15e6",
+      "rationale": "Requires a network or configuration indicator with nearby BES context and a distinct security/configuration cue; an isolated address is not BCSI.",
+      "primary": "Network or configuration detail",
+      "supporting": ["BES/ESP/EACMS context", "Security or topology evidence"],
+      "patterns": [
+        { "confidence": 65, "primaryRegex": "\\b(?:192\\.0\\.2\\.(?:\\d{1,3})|198\\.51\\.100\\.(?:\\d{1,3})|203\\.0\\.113\\.(?:\\d{1,3}))\\b", "supportRegexes": ["\\b(?:BES|ESP|EACMS)\\b"] },
+        { "confidence": 75, "primaryRegex": "\\b(?:192\\.0\\.2\\.(?:\\d{1,3})|198\\.51\\.100\\.(?:\\d{1,3})|203\\.0\\.113\\.(?:\\d{1,3}))\\b", "supportRegexes": ["\\b(?:BES|ESP|EACMS)\\b", "\\b(?:firewall|subnet|topology|gateway|ACL)\\b"] },
+        { "confidence": 85, "primaryRegex": "\\b(?:192\\.0\\.2\\.(?:\\d{1,3})|198\\.51\\.100\\.(?:\\d{1,3})|203\\.0\\.113\\.(?:\\d{1,3}))\\b", "supportRegexes": ["\\b(?:BES|ESP|EACMS)\\b", "\\b(?:firewall|subnet|topology|gateway|ACL)\\b", "\\b(?:deny|allow|ingress|egress|VLAN)\\b"] }
+      ]
+    },
+    {
+      "key": "bcsi-access-procedures",
+      "name": "BCSI Access and Security Procedures",
+      "entityId": "8ad05662-d358-5c35-a026-4f30d4f052f5",
+      "rationale": "Requires a structured access procedure, BES context, and a security mechanism. Generic credentials or incidental SCADA references do not qualify.",
+      "primary": "Structured operator access procedure",
+      "supporting": ["BES context", "Authentication or access mechanism"],
+      "patterns": [
+        { "confidence": 65, "primaryRegex": "\\b(?:operator access procedure|access control procedure)\\b", "supportRegexes": ["\\b(?:BES|ESP|EACMS)\\b"] },
+        { "confidence": 75, "primaryRegex": "\\b(?:operator access procedure|access control procedure)\\b", "supportRegexes": ["\\b(?:BES|ESP|EACMS)\\b", "\\b(?:badge|MFA|authentication|authorization|jump host)\\b"] },
+        { "confidence": 85, "primaryRegex": "\\b(?:operator access procedure|access control procedure)\\b", "supportRegexes": ["\\b(?:BES|ESP|EACMS)\\b", "\\b(?:badge|MFA|authentication|authorization|jump host)\\b", "\\b(?:review\\w*|approve\\w*|revoke\\w*|audit\\w*|two-person)\\b"] }
+      ]
+    }
+  ]
+}
