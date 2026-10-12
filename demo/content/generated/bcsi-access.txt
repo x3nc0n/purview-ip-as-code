@@ -1,0 +1,3 @@
+Operator access procedure for fictional BES training station.
+A test badge and MFA are reviewed by a second fictional approver; access is audited.
+No credential, endpoint, or real procedure is included.

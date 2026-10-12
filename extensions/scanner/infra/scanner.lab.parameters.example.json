@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "labName": { "value": "pipascode" },
+    "location": { "value": "REPLACE_WITH_APPROVED_REGION" },
+    "ownerTag": { "value": "REPLACE_WITH_OWNER_ALIAS" },
+    "bootstrapArtifactUri": { "value": "https://github.com/x3nc0n/purview-ip-as-code/releases/latest/download/Invoke-LabBootstrap.ps1" },
+    "bootstrapSha256": { "value": "REPLACE_WITH_64_HEX_SHA256" },
+    "sqlExpressInstallerUri": { "value": "REPLACE_WITH_APPROVED_VERSION_PINNED_MICROSOFT_URL" },
+    "sqlExpressInstallerSha256": { "value": "REPLACE_WITH_64_HEX_SHA256" },
+    "informationProtectionClientInstallerUri": { "value": "REPLACE_WITH_APPROVED_VERSION_PINNED_MICROSOFT_URL" },
+    "informationProtectionClientInstallerSha256": { "value": "REPLACE_WITH_64_HEX_SHA256" },
+    "demoContentUri": { "value": "https://github.com/x3nc0n/purview-ip-as-code/releases/latest/download/demo-content.zip" },
+    "demoContentSha256": { "value": "REPLACE_WITH_64_HEX_SHA256" },
+    "scannerTenantId": { "value": "REPLACE_WITH_TENANT_ID" },
+    "scannerAppId": { "value": "REPLACE_WITH_APPROVED_APP_ID" },
+    "scannerDelegatedUser": { "value": "REPLACE_WITH_LICENSED_DELEGATED_USER_UPN" },
+    "scannerAppSecret": { "value": "SUPPLY_FROM_PROTECTED_SECRET_STORE" },
+    "vmAdminUsername": { "value": "REPLACE_WITH_LOCAL_ADMIN_NAME" },
+    "vmAdminPassword": { "value": "SUPPLY_A_UNIQUE_RANDOM_SECRET" },
+    "vmSize": { "value": "Standard_D2s_v5" }
+  }
+}

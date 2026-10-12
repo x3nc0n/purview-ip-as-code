@@ -1,0 +1,110 @@
+[
+  {
+    "key": "public",
+    "name": "Public",
+    "tier": 0,
+    "parent": null,
+    "priority": 10,
+    "description": "Approved for public release.",
+    "protection": { "mode": "none", "rights": [], "groupKey": null, "offlineAccessDays": null, "contentExpiration": null, "encrypt": false, "doNotForward": false }
+  },
+  {
+    "key": "non-business",
+    "name": "Non-Business",
+    "tier": 0,
+    "parent": null,
+    "priority": 20,
+    "description": "Personal or non-business content.",
+    "protection": { "mode": "none", "rights": [], "groupKey": null, "offlineAccessDays": null, "contentExpiration": null, "encrypt": false, "doNotForward": false }
+  },
+  {
+    "key": "general",
+    "name": "General",
+    "tier": 0,
+    "parent": null,
+    "priority": 30,
+    "description": "General business information.",
+    "protection": { "mode": "none", "rights": [], "groupKey": null, "offlineAccessDays": null, "contentExpiration": null, "encrypt": false, "doNotForward": false }
+  },
+  {
+    "key": "confidential",
+    "name": "Confidential",
+    "tier": 1,
+    "parent": null,
+    "priority": 100,
+    "description": "Confidential information category.",
+    "protection": { "mode": "none", "rights": [], "groupKey": null, "offlineAccessDays": null, "contentExpiration": null, "encrypt": false, "doNotForward": false }
+  },
+  {
+    "key": "confidential-any-user",
+    "name": "Any User (No Protection)",
+    "tier": 1,
+    "parent": "confidential",
+    "priority": 110,
+    "description": "No Rights Management encryption; existing access controls still apply.",
+    "protection": { "mode": "none", "rights": [], "groupKey": null, "offlineAccessDays": null, "contentExpiration": null, "encrypt": false, "doNotForward": false }
+  },
+  {
+    "key": "confidential-internal",
+    "name": "Internal Only",
+    "tier": 1,
+    "parent": "confidential",
+    "priority": 120,
+    "description": "Fixed permissions for tenant members, excluding guests.",
+    "protection": { "mode": "fixed-group", "rights": ["VIEW", "EDIT", "PRINT", "EXPORT"], "groupKey": "internal-only-audience", "offlineAccessDays": 14, "contentExpiration": "Never", "encrypt": true, "doNotForward": false }
+  },
+  {
+    "key": "confidential-recipients",
+    "name": "Recipients Only",
+    "tier": 1,
+    "parent": "confidential",
+    "priority": 130,
+    "description": "User-defined permissions for approved recipients.",
+    "protection": { "mode": "user-defined", "rights": [], "groupKey": null, "offlineAccessDays": null, "contentExpiration": null, "encrypt": true, "doNotForward": false }
+  },
+  {
+    "key": "highly-confidential",
+    "name": "Highly Confidential",
+    "tier": 2,
+    "parent": null,
+    "priority": 200,
+    "description": "Highly confidential information category.",
+    "protection": { "mode": "none", "rights": [], "groupKey": null, "offlineAccessDays": null, "contentExpiration": null, "encrypt": false, "doNotForward": false }
+  },
+  {
+    "key": "highly-confidential-any-user",
+    "name": "Any User (No Protection)",
+    "tier": 2,
+    "parent": "highly-confidential",
+    "priority": 210,
+    "description": "No Rights Management encryption; existing access controls still apply.",
+    "protection": { "mode": "none", "rights": [], "groupKey": null, "offlineAccessDays": null, "contentExpiration": null, "encrypt": false, "doNotForward": false }
+  },
+  {
+    "key": "highly-confidential-internal",
+    "name": "Internal Only",
+    "tier": 2,
+    "parent": "highly-confidential",
+    "priority": 220,
+    "description": "Fixed permissions for tenant members, excluding guests.",
+    "protection": { "mode": "fixed-group", "rights": ["VIEW", "EDIT", "PRINT", "EXPORT"], "groupKey": "internal-only-audience", "offlineAccessDays": 14, "contentExpiration": "Never", "encrypt": true, "doNotForward": false }
+  },
+  {
+    "key": "highly-confidential-recipients",
+    "name": "Recipients Only",
+    "tier": 2,
+    "parent": "highly-confidential",
+    "priority": 230,
+    "description": "User-defined permissions for approved recipients.",
+    "protection": { "mode": "user-defined", "rights": [], "groupKey": null, "offlineAccessDays": null, "contentExpiration": null, "encrypt": true, "doNotForward": false }
+  },
+  {
+    "key": "highly-confidential-bes",
+    "name": "BES",
+    "tier": 2,
+    "parent": "highly-confidential",
+    "priority": 240,
+    "description": "Illustrative BES Cyber System Information label. Fixed editable permissions for the email-enabled BES Authorized group.",
+    "protection": { "mode": "fixed-group", "rights": ["VIEW", "EDIT", "PRINT", "EXPORT"], "groupKey": "bes-authorized", "offlineAccessDays": 14, "contentExpiration": "Never", "encrypt": true, "doNotForward": false }
+  }
+]

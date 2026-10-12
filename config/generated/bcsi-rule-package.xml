@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RulePackage xmlns="http://schemas.microsoft.com/office/2011/mce">
+  <RulePack id="2439f4bb-f00c-5c0e-8a73-1ba7048bc146">
+    <Version major="1" minor="0" build="0" revision="0" />
+    <Publisher id="d8a8e7c1-3f7a-56ec-9e68-bf920bf671d3" />
+    <Details defaultLangCode="en">
+      <LocalizedDetails langcode="en">
+        <PublisherName>Purview IP as code</PublisherName>
+        <Name>Purview IP as code - illustrative BCSI</Name>
+        <Description>Illustrative contextual BCSI indicators. Not a legal classifier.</Description>
+      </LocalizedDetails>
+    </Details>
+  </RulePack>
+  <Rules>
+    <Rule id="Rule_bcsi-access-procedures">
+      <Entity id="8ad05662-d358-5c35-a026-4f30d4f052f5" patternsProximity="300" recommendedConfidence="85">
+        <Pattern confidenceLevel="65">
+          <IdMatch idRef="Regex_bcsi-access-procedures_Primary_65" />
+          <Match idRef="Regex_bcsi-access-procedures_Support_65_1" />
+        </Pattern>
+        <Pattern confidenceLevel="75">
+          <IdMatch idRef="Regex_bcsi-access-procedures_Primary_75" />
+          <Match idRef="Regex_bcsi-access-procedures_Support_75_1" />
+          <Match idRef="Regex_bcsi-access-procedures_Support_75_2" />
+        </Pattern>
+        <Pattern confidenceLevel="85">
+          <IdMatch idRef="Regex_bcsi-access-procedures_Primary_85" />
+          <Match idRef="Regex_bcsi-access-procedures_Support_85_1" />
+          <Match idRef="Regex_bcsi-access-procedures_Support_85_2" />
+          <Match idRef="Regex_bcsi-access-procedures_Support_85_3" />
+        </Pattern>
+      </Entity>
+    </Rule>
+    <Rule id="Rule_bcsi-explicit-designation">
+      <Entity id="69b9e6b5-5fb1-5a0e-8f58-6b29df3b27f2" patternsProximity="300" recommendedConfidence="85">
+        <Pattern confidenceLevel="65">
+          <IdMatch idRef="Regex_bcsi-explicit-designation_Primary_65" />
+          <Match idRef="Regex_bcsi-explicit-designation_Support_65_1" />
+        </Pattern>
+        <Pattern confidenceLevel="75">
+          <IdMatch idRef="Regex_bcsi-explicit-designation_Primary_75" />
+          <Match idRef="Regex_bcsi-explicit-designation_Support_75_1" />
+        </Pattern>
+        <Pattern confidenceLevel="85">
+          <IdMatch idRef="Regex_bcsi-explicit-designation_Primary_85" />
+        </Pattern>
+      </Entity>
+    </Rule>
+    <Rule id="Rule_bcsi-network-security">
+      <Entity id="ec6bbbc6-42e8-50db-98cf-0e14b4ad15e6" patternsProximity="300" recommendedConfidence="85">
+        <Pattern confidenceLevel="65">
+          <IdMatch idRef="Regex_bcsi-network-security_Primary_65" />
+          <Match idRef="Regex_bcsi-network-security_Support_65_1" />
+        </Pattern>
+        <Pattern confidenceLevel="75">
+          <IdMatch idRef="Regex_bcsi-network-security_Primary_75" />
+          <Match idRef="Regex_bcsi-network-security_Support_75_1" />
+          <Match idRef="Regex_bcsi-network-security_Support_75_2" />
+        </Pattern>
+        <Pattern confidenceLevel="85">
+          <IdMatch idRef="Regex_bcsi-network-security_Primary_85" />
+          <Match idRef="Regex_bcsi-network-security_Support_85_1" />
+          <Match idRef="Regex_bcsi-network-security_Support_85_2" />
+          <Match idRef="Regex_bcsi-network-security_Support_85_3" />
+        </Pattern>
+      </Entity>
+    </Rule>
+    <Regex id="Regex_bcsi-access-procedures_Primary_65">\b(?:operator access procedure|access control procedure)\b</Regex>
+    <Regex id="Regex_bcsi-access-procedures_Support_65_1">\b(?:BES|ESP|EACMS)\b</Regex>
+    <Regex id="Regex_bcsi-access-procedures_Primary_75">\b(?:operator access procedure|access control procedure)\b</Regex>
+    <Regex id="Regex_bcsi-access-procedures_Support_75_1">\b(?:BES|ESP|EACMS)\b</Regex>
+    <Regex id="Regex_bcsi-access-procedures_Support_75_2">\b(?:badge|MFA|authentication|authorization|jump host)\b</Regex>
+    <Regex id="Regex_bcsi-access-procedures_Primary_85">\b(?:operator access procedure|access control procedure)\b</Regex>
+    <Regex id="Regex_bcsi-access-procedures_Support_85_1">\b(?:BES|ESP|EACMS)\b</Regex>
+    <Regex id="Regex_bcsi-access-procedures_Support_85_2">\b(?:badge|MFA|authentication|authorization|jump host)\b</Regex>
+    <Regex id="Regex_bcsi-access-procedures_Support_85_3">\b(?:review\w*|approve\w*|revoke\w*|audit\w*|two-person)\b</Regex>
+    <Regex id="Regex_bcsi-explicit-designation_Primary_65">\bBCSI\b</Regex>
+    <Regex id="Regex_bcsi-explicit-designation_Support_65_1">\bINTERNAL\s+DEMO\s+DESIGNATION\b</Regex>
+    <Regex id="Regex_bcsi-explicit-designation_Primary_75">\bBCSI\s*[:=-]\s*INTERNAL\s+DEMO\s+DESIGNATION\b</Regex>
+    <Regex id="Regex_bcsi-explicit-designation_Support_75_1">\bHandling\s*:\s*BES\s+Cyber\s+System\s+Information\b</Regex>
+    <Regex id="Regex_bcsi-explicit-designation_Primary_85">\bBCSI\s*[:=-]\s*INTERNAL\s+DEMO\s+DESIGNATION\b</Regex>
+    <Regex id="Regex_bcsi-network-security_Primary_65">\b(?:192\.0\.2\.(?:\d{1,3})|198\.51\.100\.(?:\d{1,3})|203\.0\.113\.(?:\d{1,3}))\b</Regex>
+    <Regex id="Regex_bcsi-network-security_Support_65_1">\b(?:BES|ESP|EACMS)\b</Regex>
+    <Regex id="Regex_bcsi-network-security_Primary_75">\b(?:192\.0\.2\.(?:\d{1,3})|198\.51\.100\.(?:\d{1,3})|203\.0\.113\.(?:\d{1,3}))\b</Regex>
+    <Regex id="Regex_bcsi-network-security_Support_75_1">\b(?:BES|ESP|EACMS)\b</Regex>
+    <Regex id="Regex_bcsi-network-security_Support_75_2">\b(?:firewall|subnet|topology|gateway|ACL)\b</Regex>
+    <Regex id="Regex_bcsi-network-security_Primary_85">\b(?:192\.0\.2\.(?:\d{1,3})|198\.51\.100\.(?:\d{1,3})|203\.0\.113\.(?:\d{1,3}))\b</Regex>
+    <Regex id="Regex_bcsi-network-security_Support_85_1">\b(?:BES|ESP|EACMS)\b</Regex>
+    <Regex id="Regex_bcsi-network-security_Support_85_2">\b(?:firewall|subnet|topology|gateway|ACL)\b</Regex>
+    <Regex id="Regex_bcsi-network-security_Support_85_3">\b(?:deny|allow|ingress|egress|VLAN)\b</Regex>
+  </Rules>
+</RulePackage>

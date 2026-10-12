@@ -1,0 +1,119 @@
+name: Deploy private scanner demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      resource_group:
+        description: Existing, reviewed resource group in the protected Azure subscription
+        required: true
+        type: string
+      release_tag:
+        description: Exact reviewed release tag containing azuredeploy.json
+        required: true
+        type: string
+      confirmation:
+        description: Enter DEPLOY-SYNTHETIC-PURVIEW-SCANNER to continue
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-private-scanner-demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: scanner-demo-approval
+    env:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      SCANNER_LAB_PARAMETERS_JSON: ${{ secrets.SCANNER_LAB_PARAMETERS_JSON }}
+      RESOURCE_GROUP: ${{ inputs.resource_group }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - name: Validate explicit deployment request
+        shell: pwsh
+        env:
+          DEPLOYMENT_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if ($env:DEPLOYMENT_CONFIRMATION -cne 'DEPLOY-SYNTHETIC-PURVIEW-SCANNER') {
+            throw 'The exact deployment confirmation phrase is required.'
+          }
+          if ($env:RELEASE_TAG -notmatch '^v[0-9A-Za-z][0-9A-Za-z._-]*$') {
+            throw 'A versioned release tag is required.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:SCANNER_LAB_PARAMETERS_JSON)) {
+            throw 'The protected environment secret SCANNER_LAB_PARAMETERS_JSON is required.'
+          }
+
+      - name: Log in to the explicitly configured Azure subscription
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb4e0b5e0b8c3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Download the exact released template
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern azuredeploy.json --dir "$RUNNER_TEMP"
+
+      - name: Validate parameters and deploy to the existing resource group
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parameterDocument = $env:SCANNER_LAB_PARAMETERS_JSON | ConvertFrom-Json -AsHashtable
+          if (-not $parameterDocument.parameters) {
+            throw 'Protected ARM parameter document must contain a parameters object.'
+          }
+          $required = @(
+            'labName', 'location', 'ownerTag', 'bootstrapArtifactUri', 'bootstrapSha256',
+            'sqlExpressInstallerUri', 'sqlExpressInstallerSha256', 'informationProtectionClientInstallerUri',
+            'informationProtectionClientInstallerSha256', 'demoContentUri', 'demoContentSha256',
+            'scannerTenantId', 'scannerAppId', 'scannerDelegatedUser', 'scannerAppSecret',
+            'vmAdminUsername', 'vmAdminPassword'
+          )
+          foreach ($name in $required) {
+            if (-not $parameterDocument.parameters.ContainsKey($name) -or $null -eq $parameterDocument.parameters[$name].value) {
+              throw "Required deployment parameter '$name' is missing."
+            }
+            if ([string]$parameterDocument.parameters[$name].value -match '^(REPLACE_|SUPPLY_)') {
+              throw "Deployment parameter '$name' is still a placeholder."
+            }
+          }
+          foreach ($name in @('bootstrapSha256', 'sqlExpressInstallerSha256', 'informationProtectionClientInstallerSha256', 'demoContentSha256')) {
+            if ([string]$parameterDocument.parameters[$name].value -notmatch '^[A-Fa-f0-9]{64}$') {
+              throw "Deployment parameter '$name' must be a 64-character SHA-256 value."
+            }
+          }
+          if ($env:RESOURCE_GROUP -notmatch '^[A-Za-z0-9_.()\-]{1,90}$') {
+            throw 'Resource group name contains unsupported characters.'
+          }
+
+          $templatePath = Join-Path $env:RUNNER_TEMP 'azuredeploy.json'
+          $parametersPath = Join-Path $env:RUNNER_TEMP 'scanner-lab.parameters.json'
+          try {
+            [System.IO.File]::WriteAllText($parametersPath, ($parameterDocument | ConvertTo-Json -Depth 20), [System.Text.UTF8Encoding]::new($false))
+            az deployment group create `
+              --resource-group $env:RESOURCE_GROUP `
+              --name "pipascode-$([guid]::NewGuid().ToString('N'))" `
+              --template-file $templatePath `
+              --parameters "@$parametersPath" `
+              --only-show-errors
+            if ($LASTEXITCODE -ne 0) {
+              throw 'Azure Resource Manager deployment failed. Review sanitized deployment operations in the approved subscription.'
+            }
+          }
+          finally {
+            if (Test-Path -LiteralPath $parametersPath) {
+              Remove-Item -LiteralPath $parametersPath -Force
+            }
+          }

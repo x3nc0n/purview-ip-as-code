@@ -1,0 +1,4 @@
+.purview-state/
+__pycache__/
+*.py[cod]
+testResults.xml

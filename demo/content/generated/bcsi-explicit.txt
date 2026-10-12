@@ -1,0 +1,4 @@
+BCSI: INTERNAL DEMO DESIGNATION
+Handling: BES Cyber System Information
+Facility: Fictional Northwind-7 training station.
+This is synthetic, inert training content. No real system or facility is described.

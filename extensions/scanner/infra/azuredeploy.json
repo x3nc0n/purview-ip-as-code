@@ -1,0 +1,1002 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.46.1.21595",
+      "templateHash": "10663228633497983116"
+    }
+  },
+  "parameters": {
+    "labName": {
+      "type": "string",
+      "defaultValue": "pipascode",
+      "minLength": 3,
+      "maxLength": 20,
+      "metadata": {
+        "description": "Short demo lab name; use lowercase letters, digits, and hyphens."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for the isolated demo resources."
+      }
+    },
+    "ownerTag": {
+      "type": "string",
+      "metadata": {
+        "description": "Tags used to identify this disposable, synthetic-data lab."
+      }
+    },
+    "bootstrapArtifactUri": {
+      "type": "string",
+      "metadata": {
+        "description": "Existing, reviewed release asset URL for the scanner bootstrap script."
+      }
+    },
+    "bootstrapSha256": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "metadata": {
+        "description": "Expected SHA-256 of the exact bootstrap release asset."
+      }
+    },
+    "sqlExpressInstallerUri": {
+      "type": "string",
+      "metadata": {
+        "description": "Version-pinned SQL Server Express installer URL."
+      }
+    },
+    "sqlExpressInstallerSha256": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "metadata": {
+        "description": "Expected SHA-256 for the SQL Express installer."
+      }
+    },
+    "informationProtectionClientInstallerUri": {
+      "type": "string",
+      "metadata": {
+        "description": "Version-pinned Microsoft Purview Information Protection client installer URL."
+      }
+    },
+    "informationProtectionClientInstallerSha256": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "metadata": {
+        "description": "Expected SHA-256 for the Information Protection client installer."
+      }
+    },
+    "demoContentUri": {
+      "type": "string",
+      "metadata": {
+        "description": "Fixture ZIP from the same public release as this template."
+      }
+    },
+    "demoContentSha256": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "metadata": {
+        "description": "Expected SHA-256 for the synthetic fixture ZIP."
+      }
+    },
+    "scannerTenantId": {
+      "type": "string",
+      "metadata": {
+        "description": "Tenant ID used by the separate scanner delegated identity."
+      }
+    },
+    "scannerAppId": {
+      "type": "string",
+      "metadata": {
+        "description": "App registration ID used by the Information Protection scanner."
+      }
+    },
+    "scannerDelegatedUser": {
+      "type": "string",
+      "metadata": {
+        "description": "Licensed delegated Entra user assigned scanner label policies."
+      }
+    },
+    "scannerAppSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Scanner app secret, stored only as a Key Vault secret."
+      }
+    },
+    "vmAdminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "Local Windows VM administrator account name."
+      }
+    },
+    "vmAdminPassword": {
+      "type": "securestring",
+      "minLength": 14,
+      "metadata": {
+        "description": "Local Windows VM administrator password. Never emitted as an output."
+      }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_D2s_v5",
+      "metadata": {
+        "description": "Optional supported non-Core Windows Server VM size."
+      }
+    }
+  },
+  "variables": {
+    "suffix": "[uniqueString(resourceGroup().id, parameters('labName'))]",
+    "storageAccountName": "[format('pipascode{0}', variables('suffix'))]",
+    "keyVaultName": "[take(toLower(replace(format('{0}-{1}', parameters('labName'), variables('suffix')), '-', '')), 24)]",
+    "tags": {
+      "workload": "purview-ip-as-code-scanner-demo",
+      "data": "synthetic-only",
+      "owner": "[parameters('ownerTag')]",
+      "environment": "demo"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[format('{0}-scanner-identity', parameters('labName'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'storage-key-operator')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '81a9662b-bebf-436f-a333-f67b29880f12')]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName'))), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), 'key-vault-secrets-user')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName'))), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "scanner-network",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "labName": {
+            "value": "[parameters('labName')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "13424270228154082632"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "labName": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/networkSecurityGroups",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}-nsg', parameters('labName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "securityRules": [
+                  {
+                    "name": "AllowHttpsEgress",
+                    "properties": {
+                      "description": "Allow scanner bootstrap and Microsoft service HTTPS egress.",
+                      "protocol": "Tcp",
+                      "sourcePortRange": "*",
+                      "destinationPortRange": "443",
+                      "sourceAddressPrefix": "*",
+                      "destinationAddressPrefix": "Internet",
+                      "access": "Allow",
+                      "priority": 100,
+                      "direction": "Outbound"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/virtualNetworks",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}-vnet', parameters('labName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "addressSpace": {
+                  "addressPrefixes": [
+                    "10.40.0.0/16"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Network/virtualNetworks/subnets",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', format('{0}-vnet', parameters('labName')), 'scanner-vm')]",
+              "properties": {
+                "addressPrefix": "10.40.1.0/24",
+                "networkSecurityGroup": {
+                  "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('labName')))]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('labName')))]",
+                "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('labName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/virtualNetworks/subnets",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', format('{0}-vnet', parameters('labName')), 'private-endpoints')]",
+              "properties": {
+                "addressPrefix": "10.40.2.0/24",
+                "privateEndpointNetworkPolicies": "Disabled"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('labName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "virtualNetworkId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('labName')))]"
+            },
+            "vmSubnetId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', format('{0}-vnet', parameters('labName')), 'scanner-vm')]"
+            },
+            "privateEndpointSubnetId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', format('{0}-vnet', parameters('labName')), 'private-endpoints')]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "scanner-storage",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "storageAccountName": {
+            "value": "[variables('storageAccountName')]"
+          },
+          "privateEndpointSubnetId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'scanner-network'), '2025-04-01').outputs.privateEndpointSubnetId.value]"
+          },
+          "virtualNetworkId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'scanner-network'), '2025-04-01').outputs.virtualNetworkId.value]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "2591248085490923988"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "storageAccountName": {
+              "type": "string"
+            },
+            "privateEndpointSubnetId": {
+              "type": "string"
+            },
+            "virtualNetworkId": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "variables": {
+            "filePrivateDnsZoneName": "[format('privatelink.file.{0}', environment().suffixes.storage)]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2023-05-01",
+              "name": "[parameters('storageAccountName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                "supportsHttpsTrafficOnly": true,
+                "minimumTlsVersion": "TLS1_2",
+                "allowBlobPublicAccess": false,
+                "allowSharedKeyAccess": true,
+                "publicNetworkAccess": "Disabled",
+                "networkAcls": {
+                  "bypass": "None",
+                  "defaultAction": "Deny",
+                  "virtualNetworkRules": [],
+                  "ipRules": []
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/fileServices",
+              "apiVersion": "2023-05-01",
+              "name": "[format('{0}/{1}', parameters('storageAccountName'), 'default')]",
+              "properties": {
+                "protocolSettings": {
+                  "smb": {
+                    "versions": "SMB3.1.1",
+                    "authenticationMethods": "NTLMv2",
+                    "channelEncryption": "AES-256-GCM"
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+              "apiVersion": "2023-05-01",
+              "name": "[format('{0}/{1}/{2}', parameters('storageAccountName'), 'default', 'scanner-demo')]",
+              "properties": {
+                "enabledProtocols": "SMB",
+                "shareQuota": 100,
+                "accessTier": "TransactionOptimized"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', parameters('storageAccountName'), 'default')]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones",
+              "apiVersion": "2020-06-01",
+              "name": "[variables('filePrivateDnsZoneName')]",
+              "location": "global",
+              "tags": "[parameters('tags')]"
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+              "apiVersion": "2020-06-01",
+              "name": "[format('{0}/{1}', variables('filePrivateDnsZoneName'), format('{0}-scanner-link', uniqueString(parameters('virtualNetworkId'))))]",
+              "location": "global",
+              "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                  "id": "[parameters('virtualNetworkId')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('filePrivateDnsZoneName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}-file-pe', parameters('storageAccountName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('privateEndpointSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "[format('{0}-file', parameters('storageAccountName'))]",
+                    "properties": {
+                      "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+                      "groupIds": [
+                        "file"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', format('{0}-file-pe', parameters('storageAccountName')), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "file",
+                    "properties": {
+                      "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', variables('filePrivateDnsZoneName'))]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('filePrivateDnsZoneName'))]",
+                "[resourceId('Microsoft.Network/privateEndpoints', format('{0}-file-pe', parameters('storageAccountName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "storageAccountId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+            },
+            "storageAccountName": {
+              "type": "string",
+              "value": "[parameters('storageAccountName')]"
+            },
+            "fileShareName": {
+              "type": "string",
+              "value": "scanner-demo"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'scanner-network')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "scanner-vault",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "keyVaultName": {
+            "value": "[variables('keyVaultName')]"
+          },
+          "privateEndpointSubnetId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'scanner-network'), '2025-04-01').outputs.privateEndpointSubnetId.value]"
+          },
+          "virtualNetworkId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'scanner-network'), '2025-04-01').outputs.virtualNetworkId.value]"
+          },
+          "scannerAppSecret": {
+            "value": "[parameters('scannerAppSecret')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "17237585374643062931"
+            }
+          },
+          "parameters": {
+            "scannerAppSecret": {
+              "type": "securestring"
+            },
+            "location": {
+              "type": "string"
+            },
+            "keyVaultName": {
+              "type": "string"
+            },
+            "privateEndpointSubnetId": {
+              "type": "string"
+            },
+            "virtualNetworkId": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('keyVaultName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "tenantId": "[tenant().tenantId]",
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                },
+                "enableRbacAuthorization": true,
+                "enableSoftDelete": true,
+                "softDeleteRetentionInDays": 90,
+                "enablePurgeProtection": true,
+                "publicNetworkAccess": "Disabled",
+                "networkAcls": {
+                  "bypass": "None",
+                  "defaultAction": "Deny",
+                  "ipRules": [],
+                  "virtualNetworkRules": []
+                },
+                "accessPolicies": []
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'scanner-app-secret')]",
+              "properties": {
+                "value": "[parameters('scannerAppSecret')]",
+                "attributes": {
+                  "enabled": true
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones",
+              "apiVersion": "2020-06-01",
+              "name": "privatelink.vaultcore.azure.net",
+              "location": "global",
+              "tags": "[parameters('tags')]"
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+              "apiVersion": "2020-06-01",
+              "name": "[format('{0}/{1}', 'privatelink.vaultcore.azure.net', format('{0}-scanner-link', uniqueString(parameters('virtualNetworkId'))))]",
+              "location": "global",
+              "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                  "id": "[parameters('virtualNetworkId')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.vaultcore.azure.net')]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}-pe', parameters('keyVaultName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('privateEndpointSubnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "[format('{0}-vault', parameters('keyVaultName'))]",
+                    "properties": {
+                      "privateLinkServiceId": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+                      "groupIds": [
+                        "vault"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', format('{0}-pe', parameters('keyVaultName')), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "vault",
+                    "properties": {
+                      "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.vaultcore.azure.net')]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.vaultcore.azure.net')]",
+                "[resourceId('Microsoft.Network/privateEndpoints', format('{0}-pe', parameters('keyVaultName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "vaultId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+            },
+            "vaultName": {
+              "type": "string",
+              "value": "[parameters('keyVaultName')]"
+            },
+            "vaultUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), '2023-07-01').vaultUri]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'scanner-network')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "scanner-vm",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "labName": {
+            "value": "[parameters('labName')]"
+          },
+          "vmSize": {
+            "value": "[parameters('vmSize')]"
+          },
+          "vmAdminUsername": {
+            "value": "[parameters('vmAdminUsername')]"
+          },
+          "vmAdminPassword": {
+            "value": "[parameters('vmAdminPassword')]"
+          },
+          "vmSubnetId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'scanner-network'), '2025-04-01').outputs.vmSubnetId.value]"
+          },
+          "storageAccountName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'scanner-storage'), '2025-04-01').outputs.storageAccountName.value]"
+          },
+          "fileShareName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'scanner-storage'), '2025-04-01').outputs.fileShareName.value]"
+          },
+          "keyVaultUri": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'scanner-vault'), '2025-04-01').outputs.vaultUri.value]"
+          },
+          "scannerTenantId": {
+            "value": "[parameters('scannerTenantId')]"
+          },
+          "scannerAppId": {
+            "value": "[parameters('scannerAppId')]"
+          },
+          "scannerDelegatedUser": {
+            "value": "[parameters('scannerDelegatedUser')]"
+          },
+          "identityResourceId": {
+            "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName')))]"
+          },
+          "bootstrapArtifactUri": {
+            "value": "[parameters('bootstrapArtifactUri')]"
+          },
+          "bootstrapSha256": {
+            "value": "[parameters('bootstrapSha256')]"
+          },
+          "sqlExpressInstallerUri": {
+            "value": "[parameters('sqlExpressInstallerUri')]"
+          },
+          "sqlExpressInstallerSha256": {
+            "value": "[parameters('sqlExpressInstallerSha256')]"
+          },
+          "informationProtectionClientInstallerUri": {
+            "value": "[parameters('informationProtectionClientInstallerUri')]"
+          },
+          "informationProtectionClientInstallerSha256": {
+            "value": "[parameters('informationProtectionClientInstallerSha256')]"
+          },
+          "demoContentUri": {
+            "value": "[parameters('demoContentUri')]"
+          },
+          "demoContentSha256": {
+            "value": "[parameters('demoContentSha256')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "8352010249690046199"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "labName": {
+              "type": "string"
+            },
+            "vmSize": {
+              "type": "string"
+            },
+            "vmAdminUsername": {
+              "type": "string"
+            },
+            "vmAdminPassword": {
+              "type": "securestring"
+            },
+            "vmSubnetId": {
+              "type": "string"
+            },
+            "storageAccountName": {
+              "type": "string"
+            },
+            "fileShareName": {
+              "type": "string"
+            },
+            "keyVaultUri": {
+              "type": "string"
+            },
+            "scannerTenantId": {
+              "type": "string"
+            },
+            "scannerAppId": {
+              "type": "string"
+            },
+            "scannerDelegatedUser": {
+              "type": "string"
+            },
+            "identityResourceId": {
+              "type": "string"
+            },
+            "bootstrapArtifactUri": {
+              "type": "string"
+            },
+            "bootstrapSha256": {
+              "type": "string"
+            },
+            "sqlExpressInstallerUri": {
+              "type": "string"
+            },
+            "sqlExpressInstallerSha256": {
+              "type": "string"
+            },
+            "informationProtectionClientInstallerUri": {
+              "type": "string"
+            },
+            "informationProtectionClientInstallerSha256": {
+              "type": "string"
+            },
+            "demoContentUri": {
+              "type": "string"
+            },
+            "demoContentSha256": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "variables": {
+            "bootstrapParametersBase64": "[base64(string(createObject('tenantId', parameters('scannerTenantId'), 'appId', parameters('scannerAppId'), 'delegatedUser', parameters('scannerDelegatedUser'), 'vaultUri', parameters('keyVaultUri'), 'storageAccountName', parameters('storageAccountName'), 'shareName', parameters('fileShareName'), 'sqlExpressUri', parameters('sqlExpressInstallerUri'), 'sqlExpressSha256', parameters('sqlExpressInstallerSha256'), 'clientUri', parameters('informationProtectionClientInstallerUri'), 'clientSha256', parameters('informationProtectionClientInstallerSha256'), 'fixtureUri', parameters('demoContentUri'), 'fixtureSha256', parameters('demoContentSha256'))))]",
+            "bootstrapSha256Base64": "[base64(parameters('bootstrapSha256'))]",
+            "bootstrapCommand": "[format('powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference=''Stop'';$expected=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(''{0}''));if((Get-FileHash -LiteralPath .\\Invoke-LabBootstrap.ps1 -Algorithm SHA256).Hash -ne $expected){{throw ''Bootstrap SHA-256 verification failed.''}};& .\\Invoke-LabBootstrap.ps1 -BootstrapParametersBase64 ''{1}'' -VerifyBootstrapSha256 $expected\"', variables('bootstrapSha256Base64'), variables('bootstrapParametersBase64'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}-scanner-nic', parameters('labName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "ipConfigurations": [
+                  {
+                    "name": "scanner-ip",
+                    "properties": {
+                      "privateIPAllocationMethod": "Dynamic",
+                      "subnet": {
+                        "id": "[parameters('vmSubnetId')]"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Compute/virtualMachines",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}-scanner-vm', parameters('labName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('identityResourceId'))]": {}
+                }
+              },
+              "properties": {
+                "hardwareProfile": {
+                  "vmSize": "[parameters('vmSize')]"
+                },
+                "osProfile": {
+                  "computerName": "[take(format('{0}-scanner', parameters('labName')), 15)]",
+                  "adminUsername": "[parameters('vmAdminUsername')]",
+                  "adminPassword": "[parameters('vmAdminPassword')]",
+                  "windowsConfiguration": {
+                    "provisionVMAgent": true,
+                    "enableAutomaticUpdates": true
+                  }
+                },
+                "storageProfile": {
+                  "imageReference": {
+                    "publisher": "MicrosoftWindowsServer",
+                    "offer": "WindowsServer",
+                    "sku": "2022-datacenter-azure-edition",
+                    "version": "latest"
+                  },
+                  "osDisk": {
+                    "name": "[format('{0}-scanner-os', parameters('labName'))]",
+                    "createOption": "FromImage",
+                    "managedDisk": {
+                      "storageAccountType": "StandardSSD_LRS"
+                    }
+                  }
+                },
+                "networkProfile": {
+                  "networkInterfaces": [
+                    {
+                      "id": "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-scanner-nic', parameters('labName')))]",
+                      "properties": {
+                        "primary": true
+                      }
+                    }
+                  ]
+                },
+                "diagnosticsProfile": {
+                  "bootDiagnostics": {
+                    "enabled": true
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-scanner-nic', parameters('labName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Compute/virtualMachines/extensions",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', format('{0}-scanner-vm', parameters('labName')), 'ScannerBootstrap')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "publisher": "Microsoft.Compute",
+                "type": "CustomScriptExtension",
+                "typeHandlerVersion": "1.10",
+                "autoUpgradeMinorVersion": false,
+                "settings": {
+                  "fileUris": [
+                    "[parameters('bootstrapArtifactUri')]"
+                  ],
+                  "timestamp": 1
+                },
+                "protectedSettings": {
+                  "commandToExecute": "[variables('bootstrapCommand')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', format('{0}-scanner-vm', parameters('labName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "vmId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Compute/virtualMachines', format('{0}-scanner-vm', parameters('labName')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'scanner-network')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName')))]",
+        "[resourceId('Microsoft.Resources/deployments', 'scanner-storage')]",
+        "[extensionResourceId(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'storage-key-operator'))]",
+        "[resourceId('Microsoft.Resources/deployments', 'scanner-vault')]",
+        "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), 'key-vault-secrets-user'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "scannerVmId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'scanner-vm'), '2025-04-01').outputs.vmId.value]"
+    },
+    "scannerIdentityPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName'))), '2023-01-31').principalId]"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'scanner-storage'), '2025-04-01').outputs.storageAccountName.value]"
+    },
+    "fileShareName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'scanner-storage'), '2025-04-01').outputs.fileShareName.value]"
+    },
+    "keyVaultUri": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'scanner-vault'), '2025-04-01').outputs.vaultUri.value]"
+    }
+  }
+}

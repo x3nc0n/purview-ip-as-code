@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "policyKey": "demo-publishing",
+  "name": "Purview IP as code - demo publishing",
+  "audienceKey": "demo-pilot",
+  "defaultLabelKey": "general",
+  "mandatory": false,
+  "requireDowngradeJustification": true,
+  "outlook": {
+    "showPrompt": true,
+    "defaultLabel": true
+  }
+}

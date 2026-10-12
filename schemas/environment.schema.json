@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Purview environment overlay",
+  "type": "object",
+  "required": ["schemaVersion", "environment", "tenant", "ownership", "groups", "audience", "scopes", "features"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "enum": [1] },
+    "environment": { "type": "string", "minLength": 1 },
+    "tenant": {
+      "type": "object",
+      "required": ["id", "labelScheme"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "labelScheme": { "type": "string", "enum": ["classic", "modern", "detect"] }
+      },
+      "additionalProperties": false
+    },
+    "ownership": {
+      "type": "object",
+      "required": ["managedLabelKeys", "managedPolicyKeys"],
+      "properties": {
+        "managedLabelKeys": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "managedPolicyKeys": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "groups": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["key", "id", "email", "purpose"],
+        "properties": {
+          "key": { "type": "string" },
+          "id": { "type": "string" },
+          "email": { "type": "string" },
+          "purpose": { "type": "string", "enum": ["bes-authorized", "internal-only-audience"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "audience": {
+      "type": "object",
+      "required": ["key", "id"],
+      "properties": {
+        "key": { "type": "string" },
+        "id": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "scopes": {
+      "type": "object",
+      "required": ["sharePointLocations", "oneDriveLocations", "exchangeLocations"],
+      "properties": {
+        "sharePointLocations": { "type": "array", "items": { "type": "string" } },
+        "oneDriveLocations": { "type": "array", "items": { "type": "string" } },
+        "exchangeLocations": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "features": {
+      "type": "object",
+      "required": ["encryptBes", "publishingPolicy", "activationRequiresApproval"],
+      "properties": {
+        "encryptBes": { "type": "boolean" },
+        "publishingPolicy": { "type": "boolean" },
+        "activationRequiresApproval": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

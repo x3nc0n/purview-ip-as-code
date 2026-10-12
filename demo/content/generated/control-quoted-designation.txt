@@ -1,0 +1,2 @@
+Quoted public text: "BCSI: INTERNAL DEMO DESIGNATION" is shown as a string parser example.
+This fixture tests a known limitation; regex logic cannot determine quotation, publication, or applicability.
