@@ -96,7 +96,7 @@
     "parent": "highly-confidential",
     "priority": 230,
     "description": "User-defined permissions for approved recipients.",
-    "protection": { "mode": "user-defined", "rights": [], "groupKey": null, "offlineAccessDays": null, "contentExpiration": null, "encrypt": true, "doNotForward": false }
+    "protection": { "mode": "user-defined", "rights": [], "groupKey": null, "offlineAccessDays": null, "contentExpiration": null, "encrypt": true, "doNotForward": true }
   },
   {
     "key": "highly-confidential-bes",

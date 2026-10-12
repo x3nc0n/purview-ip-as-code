@@ -7,8 +7,8 @@ Version-controlled Microsoft Purview sensitivity labels, a separately managed BC
 ## What is included
 
 - JSON definitions and JSON Schema validation for labels, policy families, detection rules, and a placeholder tenant overlay.
-- A deterministic UTF-8 custom sensitive-information-type (SIT) XML compiler with stable, declared entity identifiers.
-- A PowerShell module and commands for offline validation, plan generation, drift reporting, and fail-closed tenant-operation gates.
+- A deterministic Unicode UTF-16 custom sensitive-information-type (SIT) XML compiler with stable, declared entity identifiers.
+- A PowerShell module and commands for offline validation, plan generation, inventory-backed label/SIT/auto-label reconciliation, guarded activation, and drift reporting.
 - Independent high-confidence BCSI policies and SSN-count PII policies. The fictional PII threshold is 200 occurrences **in one item**, not unique people or an incident total.
 - Synthetic, reproducible detection fixtures and an expected-results manifest.
 - A modular Bicep scanner lab and compiled ARM JSON template with private Azure Files SMB, private DNS, a managed identity, Key Vault, a Windows Server VM, and a guarded bootstrap contract.
@@ -40,22 +40,32 @@ No tenant connection or Azure resource is needed for these offline checks. The e
 
 ```powershell
 Import-Module ./src/PurviewIPAsCode/PurviewIPAsCode.psd1 -Force
+Connect-ExchangeOnline
 Connect-IPPSSession
 $plan = Get-PurviewDeploymentPlan -EnvironmentPath ./config/environments/demo.example.json
 Invoke-PurviewDeployment -EnvironmentPath ./config/environments/demo.example.json
-# A real, tenant-configured apply currently fails closed before any mutation.
-# Drift export requires a configured environment, initialized inventory, and read-only tenant session.
+# Tenant writes require an explicitly configured overlay, initialized inventory, and -Apply.
 ```
 
-`Invoke-PurviewDeployment` returns a plan unless `-Apply` is explicitly supplied. **Live service-side apply currently fails closed before tenant mutation** because publishing-policy and independent auto-label-rule reconciliation, stable custom-SIT ownership recovery, and label-priority behavior checks are not verified. `Enable-PurviewAutoLabeling` is likewise blocked. This is intentional: the current repository does not claim that a plan or cmdlet-parameter probe proves tenant behavior. No object is deleted automatically.
+`Invoke-PurviewDeployment` returns a plan unless `-Apply` is explicitly supplied. Before applying, configure a real tenant overlay, connect to both Exchange Online and Security & Compliance PowerShell, and create a tenant-scoped inventory. Exchange Online supplies a read-only organization tenant-ID check; Security & Compliance supplies the label, SIT, and policy cmdlets:
+
+```powershell
+./scripts/Initialize-PurviewInventory.ps1 -EnvironmentPath ./config/environments/tenant.example.json
+./scripts/Invoke-Deployment.ps1 -EnvironmentPath ./config/environments/tenant.example.json -Apply
+./scripts/Get-DriftReport.ps1 -EnvironmentPath ./config/environments/tenant.example.json
+```
+
+Apply creates or updates inventory-owned labels, imports the stable-ID custom SIT package, and creates independent auto-label policy rules in `TestWithoutNotifications` mode. Auto-label policy priority follows the target label priority, so BES wins when BCSI and PII policies overlap. Existing resources outside the inventory are never adopted, name collisions fail closed, IDs are persisted after creation, and no object is deleted. The label-publishing policy remains **blocked**: the documented `New-LabelPolicy` interface does not expose a recipient-user/group audience parameter, so the adapter will not risk publishing the labels tenant-wide. A blocked publishing policy is reported in the apply result; it is not silently approximated.
+
+Auto-label activation requires an approval record with `approved`, `approvedBy`, `simulationRunId`, and `manualLabelPreservationVerified: true`. The script re-reads every managed policy and rule, requires the reviewed simulation mode and exact configuration, and only then changes policies to `Enable`. This operator attestation is not independent evidence that the tenant preserved manual labels or classified content correctly. A plan, command-parameter probe, or local fixture run does not establish live tenant behavior. No object is deleted automatically.
 
 ## Scanner lab
 
 The scanner add-on is isolated from the Microsoft 365 service-side policies. Its pinned bootstrap verifies installer SHA-256 and Microsoft signatures, persists restart state, uses a dedicated local scanner service account, retrieves the app credential from Key Vault through the VM identity, and seeds only an empty dedicated share with a pinned synthetic corpus. It leaves enforcement, content labeling, relabeling, and default-label enforcement off. A completed discovery scan is not enforcement readiness: scanner label-condition mapping and manual-label behavior have no verified writer in the supported cmdlet surface and remain explicitly blocked.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Fx3nc0n%2Fpurview-ip-as-code%2Freleases%2Flatest%2Fdownload%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Fx3nc0n%2Fpurview-ip-as-code%2Freleases%2Fdownload%2Fv1.0.0%2Fazuredeploy.json)
 
-The button intentionally uses a public release artifact, not branch content. Push a reviewed `v*` tag and approve the protected `scanner-release-approval` environment to publish a release containing the ARM template, bootstrap script, and fixture archive. Replace every placeholder in [`extensions/scanner/infra/scanner.lab.parameters.example.json`](extensions/scanner/infra/scanner.lab.parameters.example.json) with an approved installer URI and verified SHA-256 before deployment. The lab has no public RDP/SMB endpoint and uses a dedicated storage-account key only for synthetic demo data. A licensed delegated scanner identity, approved app registration and consent, Azure RBAC, network reachability, and a verified scanner/client compatibility profile remain operator prerequisites. See [`extensions/scanner/README.md`](extensions/scanner/README.md) before deployment.
+The button is pinned to the immutable `v1.0.0` release asset, not branch content or a mutable `latest` URL. The release workflow publishes the ARM template, bootstrap script, and fixture archive only after approval by the protected `scanner-release-approval` environment; those URLs remain unavailable until that review completes. Replace the remaining placeholders in [`extensions/scanner/infra/scanner.lab.parameters.example.json`](extensions/scanner/infra/scanner.lab.parameters.example.json) with approved installer URLs, tenant values, and SHA-256 values from the released `SHA256SUMS.txt` before deployment. The lab has no public RDP/SMB endpoint and uses a dedicated storage-account key only for synthetic demo data. A licensed delegated scanner identity, approved app registration and consent, Azure RBAC, network reachability, and a verified scanner/client compatibility profile remain operator prerequisites. See [`extensions/scanner/README.md`](extensions/scanner/README.md) before deployment.
 
 No Azure resources are deployed by CI. The `deploy-demo` workflow is manually dispatched from the default branch and requires the `scanner-demo-approval` GitHub environment, an Azure OIDC identity, and an operator-supplied ARM-parameters JSON secret. This repository's environment requires review by the configured repository owner and is restricted to `main`; the release environment separately gates public assets to reviewed `v*` tags. Verify both protections before use. Forks must configure equivalent rules. The deployment workflow targets an already-existing resource group and never creates one.
 

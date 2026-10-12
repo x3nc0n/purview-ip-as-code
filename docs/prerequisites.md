@@ -9,7 +9,7 @@
 
 ## Service-side Purview work
 
-Use an explicitly configured, non-production tenant overlay with a detected label scheme, email-enabled Entra security groups, and explicit SharePoint, OneDrive, and/or Exchange locations. Verify licensing, administrative roles, Security & Compliance cmdlet versions, custom SIT support, classification semantics, label ordering, guest behavior, and existing content effects before considering any service-side changes. The current adapter is plan-only and apply intentionally stops before mutation.
+Use an explicitly configured, non-production tenant overlay with a detected modern label scheme, email-enabled Entra security groups, and explicit SharePoint, OneDrive, and/or Exchange locations. Open both Exchange Online PowerShell (for read-only organization/recipient identity checks) and Security & Compliance PowerShell sessions. Verify licensing, administrative roles, Security & Compliance cmdlet versions, custom SIT support, classification semantics, label ordering, guest behavior, and existing content effects before considering any service-side changes. Apply can reconcile labels, custom SIT packages, and simulation-mode auto-label policies; label publishing is blocked because the public cmdlet does not expose the configured recipient audience.
 
 Never put real tenant/group/app identifiers, operational inventories, passwords, app secrets, certificates, or tokens in a committed overlay.
 

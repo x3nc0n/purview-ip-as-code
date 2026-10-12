@@ -14,10 +14,10 @@ Describe 'Purview configuration contracts' {
     It 'blocks tenant operations for the unconfigured demonstration overlay' {
         $result = Test-PurviewConfiguration -RequireTenantValues
         $result.Valid | Should -BeFalse
-        $result.Errors | Should -Contain 'A real tenant ID and detected label scheme are required for tenant operations.'
+        $result.Errors | Should -Contain 'A real tenant ID and detected modern label scheme are required for tenant operations.'
     }
 
-    It 'returns a safe deployment plan by default and blocks incomplete live apply before mutation' {
+    It 'returns a safe deployment plan by default and blocks live apply when the cmdlet contract is unavailable' {
         $plan = Invoke-PurviewDeployment -EnvironmentPath 'config\environments\demo.example.json'
         $plan.Actions | Should -Not -BeNullOrEmpty
         $environment = Get-Content (Join-Path $repositoryRoot 'config\environments\demo.example.json') -Raw | ConvertFrom-Json
@@ -30,7 +30,15 @@ Describe 'Purview configuration contracts' {
         $environment.scopes.sharePointLocations = @('https://example.sharepoint.com/sites/demo')
         $configuredEnvironment = Join-Path $TestDrive 'configured-environment.json'
         $environment | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $configuredEnvironment -Encoding utf8
-        { Invoke-PurviewDeployment -EnvironmentPath $configuredEnvironment -Apply } | Should -Throw '*does not yet provide verified publishing-policy*'
+        $inventoryPath = Join-Path $TestDrive 'managed-inventory.json'
+        @{
+            schemaVersion = 1
+            tenantId = $environment.tenant.id
+            labels = @{}
+            policies = @{}
+        } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $inventoryPath -Encoding utf8
+        { Invoke-PurviewDeployment -EnvironmentPath $configuredEnvironment -InventoryPath $inventoryPath -Apply } |
+            Should -Throw '*missing documented runtime capabilities*'
     }
 
     It 'keeps BCSI and PII policies independent with the inclusive 200-occurrence boundary' {
@@ -48,6 +56,12 @@ Describe 'Purview configuration contracts' {
         $bes[0].parent | Should -Be 'highly-confidential'
         $bes[0].priority | Should -BeGreaterThan (@($labels | Where-Object parent -eq 'highly-confidential' | ForEach-Object priority | Where-Object { $_ -ne 240 } | Measure-Object -Maximum).Maximum)
         @($labels | Where-Object key -eq 'confidential-bes').Count | Should -Be 0
+    }
+
+    It 'configures Do Not Forward on the Highly Confidential Recipients Only label used by the Exchange escalation' {
+        $labels = Get-Content (Join-Path $repositoryRoot 'config\labels.json') -Raw | ConvertFrom-Json
+        ($labels | Where-Object key -eq 'highly-confidential-recipients').protection.doNotForward | Should -BeTrue
+        ($labels | Where-Object key -eq 'confidential-recipients').protection.doNotForward | Should -BeFalse
     }
 
     It 'rejects schema-invalid environment data' {
@@ -72,6 +86,12 @@ Describe 'Purview configuration contracts' {
             [CmdletBinding()]
             param([string]$Identity, [string]$ErrorAction)
         }
+        function global:Connect-ExchangeOnline {}
+        function global:Get-OrganizationConfig {
+            [CmdletBinding()]
+            param()
+            return [pscustomobject]@{ ExternalDirectoryOrganizationId = '00000000-0000-0000-0000-000000000000' }
+        }
         Mock Get-Label { throw 'Read failed intentionally.' } -ModuleName PurviewIPAsCode
 
         try {
@@ -80,19 +100,22 @@ Describe 'Purview configuration contracts' {
         }
         finally {
             Remove-Item Function:\global:Get-Label -ErrorAction SilentlyContinue
+            Remove-Item Function:\global:Get-OrganizationConfig -ErrorAction SilentlyContinue
+            Remove-Item Function:\global:Connect-ExchangeOnline -ErrorAction SilentlyContinue
         }
     }
 }
 
 Describe 'Deterministic SIT XML compiler' {
-    It 'emits valid UTF-8 XML with stable entity ids, 300-character proximity, and confidence tiers' {
+    It 'emits Unicode UTF-16 XML with stable entity ids, 300-character proximity, and confidence tiers' {
         $output = Join-Path $TestDrive 'rules.xml'
         Build-PurviewRulePackage -OutputPath $output | Out-Null
         $bytes = [System.IO.File]::ReadAllBytes($output)
-        $text = [System.Text.Encoding]::UTF8.GetString($bytes)
+        [System.BitConverter]::ToString($bytes[0..1]) | Should -Be 'FF-FE'
+        $text = [System.IO.File]::ReadAllText($output, [System.Text.Encoding]::Unicode)
         $document = [xml]$text
         $document.DocumentElement.LocalName | Should -Be 'RulePackage'
-        $text | Should -Match 'encoding="utf-8"'
+        $text | Should -Match 'encoding="UTF-16"'
         $entities = $document.SelectNodes("//*[local-name()='Entity']")
         $entities.Count | Should -Be 3
         foreach ($entity in $entities) {
@@ -117,10 +140,261 @@ Describe 'Deterministic SIT XML compiler' {
         @($capabilities.Commands | Where-Object { -not $_.PSObject.Properties.Match('Available').Count }).Count | Should -Be 0
     }
 
-    It 'does not let an approval file bypass an unsupported activation adapter' {
+    It 'maps the 1-199 SSN rule to a documented exception at 200 occurrences' {
+        InModuleScope PurviewIPAsCode {
+            $definitions = Get-PurviewDefinition 'config\environments\demo.example.json'
+            $definitions.Environment.scopes.sharePointLocations = @('https://example.sharepoint.com/sites/demo')
+            $policy = $definitions.Policies | Where-Object key -eq 'pii-spo-low'
+            $arguments = Get-PurviewAutoRuleArgument -Policy $policy -Condition $policy.conditions[0] -Definitions $definitions
+            $arguments.ContentContainsSensitiveInformation | Should -HaveCount 1
+            $arguments.ContentContainsSensitiveInformation[0].minCount | Should -Be '1'
+            $arguments.ContentContainsSensitiveInformation[0].minConfidence | Should -Be '85'
+            $arguments.ExceptIfContentContainsSensitiveInformation | Should -HaveCount 1
+            $arguments.ExceptIfContentContainsSensitiveInformation[0].minCount | Should -Be '200'
+            $bcsiPolicy = $definitions.Policies | Where-Object key -eq 'bcsi-spo-high'
+            $bcsiLabel = $definitions.Labels | Where-Object key -eq 'highly-confidential-bes'
+            $bcsi = Get-PurviewAutoPolicyArgument -Policy $bcsiPolicy -Definitions $definitions -LabelId '44444444-4444-4444-8444-444444444444'
+            $piiPolicy = $definitions.Policies | Where-Object key -eq 'pii-spo-high'
+            $piiLabel = $definitions.Labels | Where-Object key -eq 'highly-confidential-internal'
+            $pii = Get-PurviewAutoPolicyArgument -Policy $piiPolicy -Definitions $definitions -LabelId '55555555-5555-4555-8555-555555555555'
+            $bcsi.Priority | Should -Be $bcsiLabel.priority
+            $pii.Priority | Should -Be $piiLabel.priority
+            $bcsi.Priority | Should -BeGreaterThan $pii.Priority
+        }
+    }
+
+    It 'creates an independent one-SIT rule for each BCSI detector' {
+        InModuleScope PurviewIPAsCode {
+            $definitions = Get-PurviewDefinition 'config\environments\demo.example.json'
+            $policy = $definitions.Policies | Where-Object key -eq 'bcsi-spo-high'
+            foreach ($condition in $policy.conditions) {
+                $arguments = Get-PurviewAutoRuleArgument -Policy $policy -Condition $condition -Definitions $definitions
+                $arguments.ContentContainsSensitiveInformation | Should -HaveCount 1
+                $arguments.ContentContainsSensitiveInformation[0].Name | Should -Be (
+                    Get-PurviewSensitiveInformationTypeName -SitKey $condition.sitKey -Definitions $definitions
+                )
+                $arguments.ContainsKey('ExceptIfContentContainsSensitiveInformation') | Should -BeFalse
+            }
+        }
+    }
+
+    It 'requires a manual-label preservation attestation in addition to approval' {
         $approval = Join-Path $TestDrive 'approval.json'
         Set-Content -LiteralPath $approval -Value '{"approved":true,"approvedBy":"reviewer","simulationRunId":"demo-123"}' -Encoding utf8
-        { Enable-PurviewAutoLabeling -EnvironmentPath 'config\environments\demo.example.json' -ApprovalRecordPath $approval } | Should -Throw '*intentionally blocked*'
+        { Enable-PurviewAutoLabeling -EnvironmentPath 'config\environments\demo.example.json' -ApprovalRecordPath $approval } |
+            Should -Throw '*manualLabelPreservationVerified=true*'
+    }
+}
+
+Describe 'Mocked service reconciliation contracts' {
+    It 'creates owned labels, a custom SIT package, and independent simulation rules, then converges without repeat writes' {
+        $global:PurviewFakeState = @{
+            Labels = [System.Collections.Generic.List[object]]::new()
+            Packages = [System.Collections.Generic.List[object]]::new()
+            Policies = [System.Collections.Generic.List[object]]::new()
+            Rules = [System.Collections.Generic.List[object]]::new()
+            Calls = [System.Collections.Generic.List[object]]::new()
+            Groups = @{
+                'bes-authorized@example.com' = '22222222-2222-4222-8222-222222222222'
+                'internal-audience@example.com' = '33333333-3333-4333-8333-333333333333'
+            }
+        }
+        function global:Connect-IPPSSession {}
+        function global:Connect-ExchangeOnline {}
+        function global:Get-OrganizationConfig {
+            [CmdletBinding()]
+            param()
+            return [pscustomobject]@{ ExternalDirectoryOrganizationId = '11111111-1111-4111-8111-111111111111' }
+        }
+        function global:Get-Label {
+            [CmdletBinding()]
+            param([string]$Identity)
+            if ($Identity) { return $global:PurviewFakeState.Labels | Where-Object { [string]$_.Guid -eq $Identity } | Select-Object -First 1 }
+            return @($global:PurviewFakeState.Labels)
+        }
+        function global:New-Label {
+            [CmdletBinding()]
+            param(
+                [string]$Name, [string]$DisplayName, [string]$Tooltip, [string[]]$ContentType,
+                [bool]$IsLabelGroup, [string]$ParentId, [bool]$EncryptionEnabled,
+                [string]$EncryptionProtectionType, [string[]]$EncryptionRightsDefinitions,
+                [Nullable[int]]$EncryptionOfflineAccessDays, [string]$EncryptionContentExpiredOnDateInDaysOrNever,
+                [bool]$EncryptionPromptUser, [bool]$EncryptionDoNotForward
+            )
+            $item = [pscustomobject]@{
+                Guid = [guid]::NewGuid().ToString()
+                Name = $Name; DisplayName = $DisplayName; Tooltip = $Tooltip; ContentType = $ContentType
+                IsLabelGroup = $IsLabelGroup; ParentId = $ParentId; Priority = 0
+                EncryptionEnabled = $EncryptionEnabled; EncryptionProtectionType = $EncryptionProtectionType
+                EncryptionRightsDefinitions = $EncryptionRightsDefinitions
+                EncryptionOfflineAccessDays = $EncryptionOfflineAccessDays
+                EncryptionContentExpiredOnDateInDaysOrNever = $EncryptionContentExpiredOnDateInDaysOrNever
+                EncryptionPromptUser = $EncryptionPromptUser; EncryptionDoNotForward = $EncryptionDoNotForward
+            }
+            [void]$global:PurviewFakeState.Labels.Add($item)
+            [void]$global:PurviewFakeState.Calls.Add([pscustomobject]@{ Command = 'New-Label'; Name = $Name })
+            return $item
+        }
+        function global:Set-Label {
+            [CmdletBinding()]
+            param(
+                [string]$Identity, [string]$DisplayName, [string]$Tooltip, [string[]]$ContentType,
+                [string]$ParentId, [int]$Priority, [bool]$EncryptionEnabled, [string]$EncryptionProtectionType,
+                [string[]]$EncryptionRightsDefinitions, [Nullable[int]]$EncryptionOfflineAccessDays,
+                [string]$EncryptionContentExpiredOnDateInDaysOrNever, [bool]$EncryptionPromptUser,
+                [bool]$EncryptionDoNotForward
+            )
+            $item = $global:PurviewFakeState.Labels | Where-Object { [string]$_.Guid -eq $Identity } | Select-Object -First 1
+            foreach ($name in @('DisplayName', 'Tooltip', 'ContentType', 'ParentId', 'Priority', 'EncryptionEnabled', 'EncryptionProtectionType', 'EncryptionRightsDefinitions', 'EncryptionOfflineAccessDays', 'EncryptionContentExpiredOnDateInDaysOrNever', 'EncryptionPromptUser', 'EncryptionDoNotForward')) {
+                if ($PSBoundParameters.ContainsKey($name)) { $item.$name = $PSBoundParameters[$name] }
+            }
+            [void]$global:PurviewFakeState.Calls.Add([pscustomobject]@{ Command = 'Set-Label'; Identity = $Identity })
+            return $item
+        }
+        function global:Get-DlpSensitiveInformationTypeRulePackage {
+            [CmdletBinding()]
+            param([string]$Identity)
+            return @($global:PurviewFakeState.Packages)
+        }
+        function global:New-DlpSensitiveInformationTypeRulePackage {
+            [CmdletBinding()]
+            param([byte[]]$FileData)
+            $item = [pscustomobject]@{ Identity = '2439f4bb-f00c-5c0e-8a73-1ba7048bc146'; Version = '1.0.0.0' }
+            [void]$global:PurviewFakeState.Packages.Add($item)
+            [void]$global:PurviewFakeState.Calls.Add([pscustomobject]@{ Command = 'New-DlpSensitiveInformationTypeRulePackage' })
+            return $item
+        }
+        function global:Set-DlpSensitiveInformationTypeRulePackage {
+            [CmdletBinding()]
+            param([byte[]]$FileData)
+            [void]$global:PurviewFakeState.Calls.Add([pscustomobject]@{ Command = 'Set-DlpSensitiveInformationTypeRulePackage' })
+        }
+        function global:Get-LabelPolicy {
+            [CmdletBinding()]
+            param([string]$Identity)
+        }
+        function global:New-LabelPolicy {
+            [CmdletBinding()]
+            param([string]$Name, [string[]]$Labels)
+        }
+        function global:Get-AutoSensitivityLabelPolicy {
+            [CmdletBinding()]
+            param([string]$Identity)
+            if ($Identity) { return $global:PurviewFakeState.Policies | Where-Object { [string]$_.Guid -eq $Identity } | Select-Object -First 1 }
+            return @($global:PurviewFakeState.Policies)
+        }
+        function global:New-AutoSensitivityLabelPolicy {
+            [CmdletBinding()]
+            param(
+                [string]$Name, [string]$ApplySensitivityLabel, [string]$Mode,
+                [string[]]$SharePointLocation, [string[]]$OneDriveLocation, [string[]]$ExchangeLocation,
+                [int]$Priority, [bool]$OverwriteLabel
+            )
+            $item = [pscustomobject]@{
+                Guid = [guid]::NewGuid().ToString(); Name = $Name
+                ApplySensitivityLabel = $ApplySensitivityLabel; Mode = $Mode; Priority = $Priority; OverwriteLabel = $OverwriteLabel
+                SharePointLocation = $SharePointLocation; OneDriveLocation = $OneDriveLocation; ExchangeLocation = $ExchangeLocation
+            }
+            [void]$global:PurviewFakeState.Policies.Add($item)
+            [void]$global:PurviewFakeState.Calls.Add([pscustomobject]@{ Command = 'New-AutoSensitivityLabelPolicy'; Name = $Name })
+            return $item
+        }
+        function global:Set-AutoSensitivityLabelPolicy {
+            [CmdletBinding()]
+            param([string]$Identity, [string]$Mode)
+            $item = $global:PurviewFakeState.Policies | Where-Object { [string]$_.Guid -eq $Identity } | Select-Object -First 1
+            $item.Mode = $Mode
+            [void]$global:PurviewFakeState.Calls.Add([pscustomobject]@{ Command = 'Set-AutoSensitivityLabelPolicy'; Identity = $Identity })
+        }
+        function global:Get-AutoSensitivityLabelRule {
+            [CmdletBinding()]
+            param([string]$Identity)
+            if ($Identity) { return $global:PurviewFakeState.Rules | Where-Object { [string]$_.Guid -eq $Identity } | Select-Object -First 1 }
+            return @($global:PurviewFakeState.Rules)
+        }
+        function global:New-AutoSensitivityLabelRule {
+            [CmdletBinding()]
+            param(
+                [string]$Name, [string]$Policy, [string]$Workload,
+                [hashtable[]]$ContentContainsSensitiveInformation,
+                [hashtable[]]$ExceptIfContentContainsSensitiveInformation
+            )
+            $item = [pscustomobject]@{
+                Guid = [guid]::NewGuid().ToString(); Name = $Name; Policy = $Policy; Workload = $Workload
+                ContentContainsSensitiveInformation = $ContentContainsSensitiveInformation
+                ExceptIfContentContainsSensitiveInformation = $ExceptIfContentContainsSensitiveInformation
+            }
+            [void]$global:PurviewFakeState.Rules.Add($item)
+            [void]$global:PurviewFakeState.Calls.Add([pscustomobject]@{ Command = 'New-AutoSensitivityLabelRule'; Name = $Name })
+            return $item
+        }
+        function global:Get-Recipient {
+            [CmdletBinding()]
+            param([string]$Identity)
+            return [pscustomobject]@{
+                PrimarySmtpAddress = $Identity; RecipientTypeDetails = 'MailUniversalSecurityGroup'
+                ExternalDirectoryObjectId = $global:PurviewFakeState.Groups[$Identity]
+            }
+        }
+        $functionNames = @(
+            'Connect-IPPSSession', 'Connect-ExchangeOnline', 'Get-OrganizationConfig', 'Get-Label', 'New-Label', 'Set-Label',
+            'Get-DlpSensitiveInformationTypeRulePackage', 'New-DlpSensitiveInformationTypeRulePackage', 'Set-DlpSensitiveInformationTypeRulePackage',
+            'Get-LabelPolicy', 'New-LabelPolicy', 'Get-AutoSensitivityLabelPolicy', 'New-AutoSensitivityLabelPolicy',
+            'Set-AutoSensitivityLabelPolicy', 'Get-AutoSensitivityLabelRule', 'New-AutoSensitivityLabelRule', 'Get-Recipient'
+        )
+        try {
+            $environment = Get-Content (Join-Path $repositoryRoot 'config\environments\demo.example.json') -Raw | ConvertFrom-Json
+            $environment.tenant.id = '11111111-1111-4111-8111-111111111111'
+            $environment.tenant.labelScheme = 'modern'
+            $environment.groups[0].id = $global:PurviewFakeState.Groups['bes-authorized@example.com']
+            $environment.groups[0].email = 'bes-authorized@example.com'
+            $environment.groups[1].id = $global:PurviewFakeState.Groups['internal-audience@example.com']
+            $environment.groups[1].email = 'internal-audience@example.com'
+            $environment.scopes.sharePointLocations = @('https://example.sharepoint.com/sites/demo')
+            $environmentPath = Join-Path $TestDrive 'mocked-environment.json'
+            $environment | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $environmentPath -Encoding utf8
+            $inventoryPath = Join-Path $TestDrive 'mocked-inventory.json'
+            Initialize-PurviewInventory -EnvironmentPath $environmentPath -InventoryPath $inventoryPath
+
+            $first = Invoke-PurviewDeployment -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -Apply
+            $first.Status | Should -Be 'PartiallyApplied'
+            @($first.Actions | Where-Object { $_.Status -eq 'Created' -and $_.Kind -eq 'Label' }).Count | Should -Be 12
+            @($global:PurviewFakeState.Calls | Where-Object Command -eq 'New-AutoSensitivityLabelRule').Count | Should -Be 5
+            @($first.Actions | Where-Object { $_.Status -eq 'Blocked' }).Count | Should -Be 6
+            $global:PurviewFakeState.Calls.Clear()
+
+            $second = Invoke-PurviewDeployment -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -Apply
+            $second.Status | Should -Be 'PartiallyApplied'
+            @($global:PurviewFakeState.Calls | Where-Object { $_.Command -in @('New-Label', 'Set-Label', 'New-AutoSensitivityLabelPolicy', 'New-AutoSensitivityLabelRule', 'New-DlpSensitiveInformationTypeRulePackage') }).Count |
+                Should -Be 0
+            $second.Limitations[0].Reason | Should -Match 'no recipient-user/group audience parameter'
+
+            $approvalPath = Join-Path $TestDrive 'activation-approval.json'
+            Set-Content -LiteralPath $approvalPath -Value '{"approved":true,"approvedBy":"reviewer","simulationRunId":"mock-run","manualLabelPreservationVerified":true}' -Encoding utf8
+            $activation = Enable-PurviewAutoLabeling -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -ApprovalRecordPath $approvalPath
+            $activation.Status | Should -Be 'Enabled'
+            @($activation.Policies).Count | Should -Be 3
+            @($global:PurviewFakeState.Calls | Where-Object Command -eq 'Set-AutoSensitivityLabelPolicy').Count | Should -Be 3
+            $global:PurviewFakeState.Calls.Clear()
+
+            $afterActivation = Invoke-PurviewDeployment -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -Apply
+            $afterActivation.Status | Should -Be 'PartiallyApplied'
+            @($global:PurviewFakeState.Calls | Where-Object { $_.Command -in @('New-Label', 'Set-Label', 'New-AutoSensitivityLabelPolicy', 'New-AutoSensitivityLabelRule', 'New-DlpSensitiveInformationTypeRulePackage', 'Set-AutoSensitivityLabelPolicy') }).Count |
+                Should -Be 0
+
+            $rogueLabel = $global:PurviewFakeState.Labels | Where-Object DisplayName -eq 'Public' | Select-Object -First 1 | Select-Object *
+            $rogueLabel.Guid = [guid]::NewGuid().ToString()
+            [void]$global:PurviewFakeState.Labels.Add($rogueLabel)
+            $global:PurviewFakeState.Calls.Clear()
+            { Invoke-PurviewDeployment -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -Apply } |
+                Should -Throw '*collides with a different tenant label*'
+            @($global:PurviewFakeState.Calls | Where-Object { $_.Command -in @('New-Label', 'Set-Label', 'New-AutoSensitivityLabelPolicy', 'New-AutoSensitivityLabelRule', 'New-DlpSensitiveInformationTypeRulePackage') }).Count |
+                Should -Be 0
+        }
+        finally {
+            foreach ($name in $functionNames) { Remove-Item "Function:\global:$name" -ErrorAction SilentlyContinue }
+            Remove-Variable PurviewFakeState -Scope Global -ErrorAction SilentlyContinue
+        }
     }
 }
 

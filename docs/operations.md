@@ -6,9 +6,11 @@ Run the commands in the root README. `Test-Configuration.ps1` validates contract
 
 ## Service-side adapter
 
-`Invoke-PurviewDeployment` is plan-only by default. Its `-Apply` path intentionally fails before tenant mutation until publishing-policy and independent auto-label-rule reconciliation, ownership recovery, and label-priority verification are complete. `Enable-AutoLabeling.ps1` remains blocked even with an approval file. Do not work around these gates by calling ad hoc cmdlets from CI or by treating the plan as evidence of deployment.
+`Invoke-PurviewDeployment` is plan-only by default. Before `-Apply`, configure a non-production overlay, connect read-only to Exchange Online and connect to Security & Compliance PowerShell, then create a tenant-scoped inventory with `Initialize-PurviewInventory.ps1`. Apply checks required cmdlets and parameters, verifies the connected tenant ID and configured mail-enabled groups, rejects unowned name collisions, and records each created GUID before proceeding. It reconciles labels, the custom SIT package, and auto-label policies/rules in simulation mode. It does not delete objects.
 
-Drift reporting requires a connected, read-only-capable Security & Compliance session and an explicit tenant-scoped inventory. At present it covers only inventoried labels; it does not infer publishing-policy or auto-label-rule ownership from display names. `Get-DriftReport.ps1` returns a PowerShell object and can write JSON to a file when `-OutputPath` is supplied.
+The documented `New-LabelPolicy` cmdlet does not expose a recipient-user/group audience parameter. Label publishing is therefore reported as blocked rather than risked tenant-wide. Auto-label activation requires a simulation approval record with `approved=true`, `approvedBy`, `simulationRunId`, and `manualLabelPreservationVerified=true`; the script re-reads managed policies/rules and verifies the expected simulation configuration before changing modes. The manual-label field is an operator attestation, not a script-verified or Microsoft-certified result. Keep activation disabled until independent tenant tests support that attestation.
+
+Drift reporting requires a connected, read-only-capable Security & Compliance session and an explicit tenant-scoped inventory. It only queries recorded GUIDs; it never adopts objects by display name. `Get-DriftReport.ps1` returns a PowerShell object and can write JSON to a file when `-OutputPath` is supplied.
 
 ## Scanner states
 
