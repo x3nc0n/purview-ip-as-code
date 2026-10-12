@@ -18,7 +18,7 @@ The example label hierarchy is `Public`, `Non-Business`, `General`, `Confidentia
 
 ### Start locally
 
-Requirements: PowerShell 7.4+, Pester 6.2+, PSScriptAnalyzer 1.25+, Python 3 with `requirements-dev.txt`, and Azure CLI with Bicep support (for the scanner template). ExchangeOnlineManagement is only relevant to tenant operations.
+Requirements: PowerShell 7.4+, Pester 6.2+, PSScriptAnalyzer 1.25+, Python 3 with `requirements-dev.txt`, and Azure CLI with Bicep CLI v0.46.1 (for deterministic scanner-template compilation). ExchangeOnlineManagement is only relevant to tenant operations.
 
 ```powershell
 ./scripts/Test-Configuration.ps1

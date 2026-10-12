@@ -59,7 +59,7 @@ jobs:
       - name: Build public assets
         shell: pwsh
         run: |
-          az bicep install
+          az bicep install --version v0.46.1
           if ($LASTEXITCODE -ne 0) { throw 'Bicep installation failed.' }
           ./extensions/scanner/scripts/New-ScannerReleaseAssets.ps1 -OutputDirectory (Join-Path $env:RUNNER_TEMP 'release-assets')
 

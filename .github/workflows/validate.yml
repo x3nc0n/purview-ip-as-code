@@ -65,6 +65,11 @@ jobs:
             $diagnostics | Format-Table -AutoSize | Out-String | Write-Error
           }
 
+      - name: Install pinned Bicep compiler
+        run: |
+          az bicep install --version v0.46.1
+          if ($LASTEXITCODE -ne 0) { throw 'Bicep installation failed.' }
+
       - name: Compile and verify committed ARM JSON
         shell: pwsh
         run: |
