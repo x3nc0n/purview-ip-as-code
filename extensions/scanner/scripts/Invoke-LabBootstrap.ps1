@@ -555,6 +555,7 @@ function Invoke-ServiceContextConfiguration {
     Update-ReadinessEntry -Name 'repositoryPath' -Value $uncPath
     Update-ReadinessEntry -Name 'fixtureFileCount' -Value $fixtureCount
 
+    Set-ScannerConfiguration -OnlineConfiguration Off -ErrorAction Stop | Out-Null
     $repository = Get-ScannerRepository -ErrorAction Stop | Where-Object { [string]$_.Path -eq "$uncPath\fixtures" }
     if (-not $repository) {
         Add-ScannerRepository -Path "$uncPath\fixtures" -ErrorAction Stop | Out-Null
