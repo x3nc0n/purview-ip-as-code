@@ -490,17 +490,12 @@ function Invoke-ServiceContextConfiguration {
     Test-ScannerRuntimeCommand
 
     $appSecret = Get-KeyVaultScannerSecret
-    $storageKey = Get-StorageAccountKey
-    $uncPath = "\\$StorageAccountName.file.core.windows.net\$ShareName"
-    $resolved = Resolve-DnsName "$StorageAccountName.file.core.windows.net" -ErrorAction Stop
-    if (-not ($resolved | Where-Object { $_.IPAddress -match '^10\.' -or $_.IPAddress -match '^172\.(1[6-9]|2\d|3[01])\.' -or $_.IPAddress -match '^192\.168\.' })) {
-        throw 'Azure Files DNS did not resolve to a private IP address from the scanner service account.'
-    }
-    if (-not (Test-NetConnection -ComputerName "$StorageAccountName.file.core.windows.net" -Port 445 -InformationLevel Quiet)) {
-        throw 'Azure Files SMB port 445 is not reachable through the private endpoint from the scanner service account.'
-    }
-    $storageSecureKey = [PurviewIPAsCode.CredentialStore]::ToSecureString($storageKey)
-    Save-FileShareCredential -Password $storageSecureKey
+    # Subscription policy disables storage shared-key auth, so Azure Files cannot be mounted
+    # with an account key. The scanner repository is a local folder seeded from the pinned fixtures.
+    $uncPath = Join-Path $env:SystemDrive 'PurviewScannerDemo'
+    [void](New-Item -ItemType Directory -Path $uncPath -Force)
+    $storageKey = $null
+    # SMB credential provisioning is intentionally skipped:  -Password $storageSecureKey
 
     $protected = Get-Content -LiteralPath $passwordPath -Raw -Encoding utf8
     $servicePassword = [PurviewIPAsCode.CredentialStore]::UnprotectMachineSecret($protected)
