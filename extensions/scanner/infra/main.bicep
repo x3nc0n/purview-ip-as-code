@@ -135,6 +135,7 @@ module scannerVm 'modules/compute.bicep' = {
     scannerAppId: scannerAppId
     scannerDelegatedUser: scannerDelegatedUser
     identityResourceId: scannerIdentity.id
+    identityClientId: scannerIdentity.properties.clientId
     bootstrapArtifactUri: bootstrapArtifactUri
     bootstrapSha256: bootstrapSha256
     sqlExpressInstallerUri: sqlExpressInstallerUri

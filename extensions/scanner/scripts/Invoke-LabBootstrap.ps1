@@ -260,6 +260,7 @@ function Import-BootstrapParameter {
     $script:AppId = [string]$parameters.appId
     $script:DelegatedUser = [string]$parameters.delegatedUser
     $script:VaultUri = [string]$parameters.vaultUri
+    $script:ManagedIdentityClientId = [string]$parameters.managedIdentityClientId
     $script:StorageAccountName = [string]$parameters.storageAccountName
     $script:ShareName = [string]$parameters.shareName
     $script:SqlExpressUri = [string]$parameters.sqlExpressUri
@@ -275,6 +276,7 @@ function Get-ManagedIdentityToken {
     param([Parameter(Mandatory)][string]$Resource)
     $identityEndpoint = 'http://169.254.169.254/metadata/identity/oauth2/token'
     $query = "api-version=2018-02-01&resource=$([uri]::EscapeDataString($Resource))"
+    if (-not [string]::IsNullOrWhiteSpace($script:ManagedIdentityClientId)) { $query += "&client_id=$($script:ManagedIdentityClientId)" }
     $response = Invoke-RestMethod -Method Get -Uri "$identityEndpoint`?$query" -Headers @{ Metadata = 'true' } -TimeoutSec 30
     if ([string]::IsNullOrWhiteSpace([string]$response.access_token)) {
         throw 'Managed identity did not return an access token.'
@@ -631,6 +633,7 @@ try {
         $script:AppId = [string]$parsedParameters.appId
         $script:DelegatedUser = [string]$parsedParameters.delegatedUser
         $script:VaultUri = [string]$parsedParameters.vaultUri
+        $script:ManagedIdentityClientId = [string]$parsedParameters.managedIdentityClientId
         $script:StorageAccountName = [string]$parsedParameters.storageAccountName
         $script:ShareName = [string]$parsedParameters.shareName
         $script:SqlExpressUri = [string]$parsedParameters.sqlExpressUri

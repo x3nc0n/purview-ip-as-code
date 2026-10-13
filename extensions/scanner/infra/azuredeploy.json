@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "17839099723577753935"
+      "templateHash": "12052103972186823632"
     }
   },
   "parameters": {
@@ -747,6 +747,9 @@
           "identityResourceId": {
             "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName')))]"
           },
+          "identityClientId": {
+            "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName'))), '2023-01-31').clientId]"
+          },
           "bootstrapArtifactUri": {
             "value": "[parameters('bootstrapArtifactUri')]"
           },
@@ -782,7 +785,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "8352010249690046199"
+              "templateHash": "11256905666117666855"
             }
           },
           "parameters": {
@@ -825,6 +828,9 @@
             "identityResourceId": {
               "type": "string"
             },
+            "identityClientId": {
+              "type": "string"
+            },
             "bootstrapArtifactUri": {
               "type": "string"
             },
@@ -854,7 +860,7 @@
             }
           },
           "variables": {
-            "bootstrapParametersBase64": "[base64(string(createObject('tenantId', parameters('scannerTenantId'), 'appId', parameters('scannerAppId'), 'delegatedUser', parameters('scannerDelegatedUser'), 'vaultUri', parameters('keyVaultUri'), 'storageAccountName', parameters('storageAccountName'), 'shareName', parameters('fileShareName'), 'sqlExpressUri', parameters('sqlExpressInstallerUri'), 'sqlExpressSha256', parameters('sqlExpressInstallerSha256'), 'clientUri', parameters('informationProtectionClientInstallerUri'), 'clientSha256', parameters('informationProtectionClientInstallerSha256'), 'fixtureUri', parameters('demoContentUri'), 'fixtureSha256', parameters('demoContentSha256'))))]",
+            "bootstrapParametersBase64": "[base64(string(createObject('tenantId', parameters('scannerTenantId'), 'appId', parameters('scannerAppId'), 'delegatedUser', parameters('scannerDelegatedUser'), 'vaultUri', parameters('keyVaultUri'), 'managedIdentityClientId', parameters('identityClientId'), 'storageAccountName', parameters('storageAccountName'), 'shareName', parameters('fileShareName'), 'sqlExpressUri', parameters('sqlExpressInstallerUri'), 'sqlExpressSha256', parameters('sqlExpressInstallerSha256'), 'clientUri', parameters('informationProtectionClientInstallerUri'), 'clientSha256', parameters('informationProtectionClientInstallerSha256'), 'fixtureUri', parameters('demoContentUri'), 'fixtureSha256', parameters('demoContentSha256'))))]",
             "bootstrapSha256Base64": "[base64(parameters('bootstrapSha256'))]",
             "bootstrapCommand": "[format('powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference=''Stop'';$expected=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(''{0}''));if((Get-FileHash -LiteralPath .\\Invoke-LabBootstrap.ps1 -Algorithm SHA256).Hash -ne $expected){{throw ''Bootstrap SHA-256 verification failed.''}};& .\\Invoke-LabBootstrap.ps1 -BootstrapParametersBase64 ''{1}'' -VerifyBootstrapSha256 $expected\"', variables('bootstrapSha256Base64'), variables('bootstrapParametersBase64'))]"
           },

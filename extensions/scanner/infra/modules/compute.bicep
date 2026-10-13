@@ -12,6 +12,7 @@ param scannerTenantId string
 param scannerAppId string
 param scannerDelegatedUser string
 param identityResourceId string
+param identityClientId string
 param bootstrapArtifactUri string
 param bootstrapSha256 string
 param sqlExpressInstallerUri string
@@ -27,6 +28,7 @@ var bootstrapParametersBase64 = base64(string({
   appId: scannerAppId
   delegatedUser: scannerDelegatedUser
   vaultUri: keyVaultUri
+  managedIdentityClientId: identityClientId
   storageAccountName: storageAccountName
   shareName: fileShareName
   sqlExpressUri: sqlExpressInstallerUri
