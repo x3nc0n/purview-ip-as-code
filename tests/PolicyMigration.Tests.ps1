@@ -16,6 +16,7 @@ BeforeAll {
     function global:Get-AutoSensitivityLabelRule {
         [CmdletBinding()]
         param()
+        if ($global:MigrationState.WarnRules -and $global:MigrationState.Removed.Count -gt 0) { Write-Warning 'Deletion pending: malformed rules were omitted.' }
         @($global:MigrationState.Rules)
     }
     function global:Remove-AutoSensitivityLabelPolicy {
@@ -41,7 +42,7 @@ Describe 'Explicit policy retirement safety' {
         $backupPath = Join-Path $TestDrive "$([guid]::NewGuid()).clixml"
         $environment | ConvertTo-Json -Depth 10 | Set-Content $environmentPath
         $inventory = @{ tenantId = $environment.tenant.id; policies = @{} }
-        $global:MigrationState = @{ Policies = @(); Rules = @(); Rows = @(); Removed = @(); Backup = $backupPath; LeaveRules = $false }
+        $global:MigrationState = @{ Policies = @(); Rules = @(); Rows = @(); Removed = @(); Backup = $backupPath; LeaveRules = $false; WarnRules = $false }
         foreach ($key in @('bcsi-high', 'pii-low', 'pii-high-files', 'pii-exchange-high')) {
             $id = [guid]::NewGuid().ToString()
             $inventory.policies[$key] = @{ policyId = $id; kind = 'AutoLabel'; rules = @{} }
@@ -147,6 +148,13 @@ Describe 'Explicit policy retirement safety' {
         { & $scriptPath -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -BackupPath $backupPath -Apply -Confirm:$false } |
             Should -Throw '*wait for deletion propagation*'
         $global:MigrationState.Removed | Should -HaveCount 0
+        (Get-Content $inventoryPath -Raw | ConvertFrom-Json -AsHashtable).policies.ContainsKey('bcsi-spo-high') | Should -BeTrue
+    }
+
+    It 'does not treat warning-omitted malformed rules as successful deletion' {
+        $global:MigrationState.WarnRules = $true
+        { & $scriptPath -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -BackupPath $backupPath -Apply -Confirm:$false } |
+            Should -Throw '*unresolved rule-read warnings*'
         (Get-Content $inventoryPath -Raw | ConvertFrom-Json -AsHashtable).policies.ContainsKey('bcsi-spo-high') | Should -BeTrue
     }
 }

@@ -46,7 +46,9 @@ $legacyNames = @(
     'Purview IP as code - PII Exchange 1-199 (simulation)'
 )
 $replacementIds = @($expectedKeys | ForEach-Object { [string]$inventory.policies[$_].policyId })
-$allRules = @(Get-AutoSensitivityLabelRule -ErrorAction Stop)
+$initialWarnings = @()
+$allRules = @(Get-AutoSensitivityLabelRule -ErrorAction Stop -WarningVariable initialWarnings)
+if ($initialWarnings.Count -gt 0) { throw 'Rule enumeration returned warnings and may be incomplete; resolve them before retirement.' }
 $allPolicies = @(Get-AutoSensitivityLabelPolicy -ErrorAction Stop)
 $candidates = @(foreach ($key in $legacyKeys) {
     if (-not $inventory.policies.ContainsKey($key)) { continue }
@@ -90,11 +92,12 @@ if ($PSCmdlet.ShouldProcess($inventory.tenantId, "Back up and retire $(@($candid
         if (-not $candidate.AlreadyAbsent) {
             Remove-AutoSensitivityLabelPolicy -Identity $candidate.Id -Confirm:$false -ErrorAction Stop
             for ($attempt = 0; $attempt -lt 12; $attempt++) {
-                $remainingRules = @(Get-AutoSensitivityLabelRule -ErrorAction Stop | Where-Object { [string]$_.Policy -eq $candidate.Id })
-                if ($remainingRules.Count -eq 0) { break }
+                $readWarnings = @()
+                $remainingRules = @(Get-AutoSensitivityLabelRule -ErrorAction Stop -WarningVariable readWarnings | Where-Object { [string]$_.Policy -eq $candidate.Id })
+                if ($remainingRules.Count -eq 0 -and $readWarnings.Count -eq 0) { break }
                 if ($attempt -lt 11) { Start-Sleep -Seconds 10 }
             }
-            if ($remainingRules.Count -gt 0) { throw "Retired policy '$($candidate.Key)' still has rules; keep its inventory and investigate using the recovery snapshot." }
+            if ($remainingRules.Count -gt 0 -or $readWarnings.Count -gt 0) { throw "Retired policy '$($candidate.Key)' still has rules or unresolved rule-read warnings; keep its inventory and investigate using the recovery snapshot." }
         }
         $inventory.policies.Remove($candidate.Key)
         & (Get-Module PurviewIPAsCode) {
