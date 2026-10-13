@@ -376,7 +376,7 @@ function Get-OrCreateScannerCredential {
         }
     }
     if (-not $localUser) {
-        New-LocalUser -Name $serviceName -Password $securePassword -PasswordNeverExpires -UserMayNotChangePassword -Description 'Microsoft Purview Information Protection scanner service account' | Out-Null
+        New-LocalUser -Name $serviceName -Password $securePassword -PasswordNeverExpires -UserMayNotChangePassword -Description 'Purview Information Protection scanner service' | Out-Null
     }
     $qualifiedName = "$env:COMPUTERNAME\$serviceName"
     return [pscredential]::new($qualifiedName, $securePassword)
