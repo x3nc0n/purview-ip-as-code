@@ -48,10 +48,6 @@ function Get-ReadinessState {
         updatedAtUtc = [datetime]::UtcNow.ToString('o')
     }
 }
-$onBehalfParameter = (Get-Command Set-Authentication).Parameters['OnBehalfOf']
-if ($onBehalfParameter.ParameterType -ne [pscredential]) {
-    throw "Installed Set-Authentication expects OnBehalfOf type '$($onBehalfParameter.ParameterType.FullName)', not PSCredential; service-context authentication is unsupported by this runtime."
-}
 
 function ConvertTo-Hashtable {
     param([AllowNull()][object]$InputObject)
