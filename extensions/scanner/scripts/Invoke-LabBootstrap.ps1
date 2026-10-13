@@ -570,19 +570,20 @@ function Invoke-ServiceContextConfiguration {
     $status = $before
     Write-Host ("ScanStatus: " + ($status | Format-List * | Out-String))
     $startedAt = [datetime]::UtcNow
-    $status = @($status) | Where-Object { $_.PSObject.Properties.Name -contains 'Status' } | Select-Object -First 1
-    $lastStatus = [string]$status.Status
+    $statusText = $status | Format-List * | Out-String
+    $lastStatus = if ($statusText -match '(?m)^\s*Status\s*:\s*(\S+)') { $Matches[1] } else { '' }
     while ([datetime]::UtcNow -lt $deadline) {
         Start-Sleep -Seconds 15
-        $status = @(Get-ScanStatus -ErrorAction Stop) | Where-Object { $_.PSObject.Properties.Name -contains 'Status' } | Select-Object -First 1
-        $lastStatus = [string]$status.Status
+        $status = Get-ScanStatus -ErrorAction Stop
+        $statusText = $status | Format-List * | Out-String
+        $lastStatus = if ($statusText -match '(?m)^\s*Status\s*:\s*(\S+)') { $Matches[1] } else { '' }
         if ($lastStatus -eq 'Error') {
             throw 'Purview scanner returned Error. Inspect the scanner event log and its restricted local diagnostics.'
         }
-        if ($lastStatus -eq 'Scanning' -or $status.IsScanning -eq $true) {
+        if ($lastStatus -eq 'Scanning' -or $statusText -match '(?m)^\s*IsScanning\s*:\s*True') {
             $observedScan = $true
         }
-        if ($lastStatus -eq 'Idle' -and $status.IsScanning -ne $true -and ($observedScan -or ([datetime]::UtcNow - $startedAt).TotalMinutes -ge 5)) {
+        if ($lastStatus -eq 'Idle' -and $statusText -notmatch '(?m)^\s*IsScanning\s*:\s*True' -and ($observedScan -or ([datetime]::UtcNow - $startedAt).TotalMinutes -ge 5)) {
             break
         }
     }
