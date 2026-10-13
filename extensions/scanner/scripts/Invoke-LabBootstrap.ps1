@@ -570,10 +570,11 @@ function Invoke-ServiceContextConfiguration {
     $status = $before
     Write-Host ("ScanStatus: " + ($status | Format-List * | Out-String))
     $startedAt = [datetime]::UtcNow
+    $status = @($status) | Where-Object { $_.PSObject.Properties.Name -contains 'Status' } | Select-Object -First 1
     $lastStatus = [string]$status.Status
     while ([datetime]::UtcNow -lt $deadline) {
         Start-Sleep -Seconds 15
-        $status = Get-ScanStatus -ErrorAction Stop
+        $status = @(Get-ScanStatus -ErrorAction Stop) | Where-Object { $_.PSObject.Properties.Name -contains 'Status' } | Select-Object -First 1
         $lastStatus = [string]$status.Status
         if ($lastStatus -eq 'Error') {
             throw 'Purview scanner returned Error. Inspect the scanner event log and its restricted local diagnostics.'
