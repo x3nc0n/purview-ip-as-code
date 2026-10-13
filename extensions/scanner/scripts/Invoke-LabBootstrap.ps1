@@ -562,6 +562,8 @@ function Invoke-ServiceContextConfiguration {
         Add-ScannerRepository -Path "$uncPath\fixtures" -ErrorAction Stop | Out-Null
     }
 
+    Restart-Service -Name MIPScanner -ErrorAction Stop
+    Start-Sleep -Seconds 45
     $before = Get-ScanStatus -ErrorAction Stop
     Start-Scan -ErrorAction Stop | Out-Null
     $deadline = [datetime]::UtcNow.AddMinutes(90)
