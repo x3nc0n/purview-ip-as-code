@@ -703,6 +703,7 @@ try {
     if (-not $clientModule) {
         $clientPackage = Get-PinnedPackage -Uri $ClientUri -Sha256 $ClientSha256 -FileName 'information-protection-client.exe' -RequireMicrosoftSignature
         Invoke-PinnedInstaller -Path $clientPackage -Name 'Microsoft Purview Information Protection client' -Arguments @('/quiet', '/norestart')
+        $env:PSModulePath = [Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')
         $clientModule = Get-Module -ListAvailable PurviewInformationProtection | Select-Object -First 1
         if (-not $clientModule) {
             throw 'The signed client installer completed but the PurviewInformationProtection module is unavailable.'
