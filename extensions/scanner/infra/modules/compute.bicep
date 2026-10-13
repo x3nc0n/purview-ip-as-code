@@ -11,6 +11,8 @@ param keyVaultUri string
 param scannerTenantId string
 param scannerAppId string
 param scannerDelegatedUser string
+param scannerClusterName string
+param scannerConfigurationMode string
 param identityResourceId string
 param identityClientId string
 param bootstrapArtifactUri string
@@ -19,6 +21,8 @@ param sqlExpressInstallerUri string
 param sqlExpressInstallerSha256 string
 param informationProtectionClientInstallerUri string
 param informationProtectionClientInstallerSha256 string
+param visualCppInstallerUri string
+param visualCppInstallerSha256 string
 param demoContentUri string
 param demoContentSha256 string
 param tags object
@@ -27,6 +31,8 @@ var bootstrapParametersBase64 = base64(string({
   tenantId: scannerTenantId
   appId: scannerAppId
   delegatedUser: scannerDelegatedUser
+  clusterName: scannerClusterName
+  configurationMode: scannerConfigurationMode
   vaultUri: keyVaultUri
   managedIdentityClientId: identityClientId
   storageAccountName: storageAccountName
@@ -35,6 +41,8 @@ var bootstrapParametersBase64 = base64(string({
   sqlExpressSha256: sqlExpressInstallerSha256
   clientUri: informationProtectionClientInstallerUri
   clientSha256: informationProtectionClientInstallerSha256
+  visualCppUri: visualCppInstallerUri
+  visualCppSha256: visualCppInstallerSha256
   fixtureUri: demoContentUri
   fixtureSha256: demoContentSha256
 }))

@@ -1,6 +1,6 @@
 # Purview Information Protection as code
 
-Version-controlled Microsoft Purview sensitivity labels, a separately managed BCSI and PII detection example, and an optional private Azure Files lab for the Microsoft Purview Information Protection scanner.
+Version-controlled Microsoft Purview sensitivity labels, a separately managed BCSI and PII detection example, and an optional private VM lab for the Microsoft Purview Information Protection scanner. **Beta release: `v1.0.0-beta.1`**; see [release notes](CHANGELOG.md).
 
 > **Demonstration only.** This repository does not certify NERC CIP compliance, determine whether information is legally BCSI, decide whether an incident is reportable, or promise production detection accuracy. Validate every detector and protection outcome with your organization and a non-production tenant.
 
@@ -11,7 +11,7 @@ Version-controlled Microsoft Purview sensitivity labels, a separately managed BC
 - A PowerShell module and commands for offline validation, plan generation, inventory-backed label/SIT/auto-label reconciliation, guarded activation, and drift reporting.
 - Independent high-confidence BCSI policies and SSN-count PII policies. The fictional PII threshold is 200 occurrences **in one item**, not unique people or an incident total.
 - Synthetic, reproducible detection fixtures and an expected-results manifest.
-- A modular Bicep scanner lab and compiled ARM JSON template with private Azure Files SMB, private DNS, a managed identity, Key Vault, a Windows Server VM, and a guarded bootstrap contract.
+- A modular Bicep scanner lab and compiled ARM template with private Azure Files infrastructure, private DNS, managed identity, Key Vault, a Windows VM, and a report-backed discovery bootstrap. The beta scans local fixtures; it does not mount Azure Files.
 - Pull-request validation, tag-built public release assets, and a manually dispatched, environment-protected GitHub deployment workflow.
 
 The example label hierarchy is `Public`, `Non-Business`, `General`, `Confidential`, and `Highly Confidential`. Confidential and Highly Confidential each have `Any User (No Protection)`, `Internal Only`, and `Recipients Only` children. `BES` exists only as the final/highest-priority Highly Confidential child. BCSI matches target only that BES label. PII policies do not exclude BCSI and never target BES.
@@ -61,11 +61,13 @@ Auto-label activation requires an approval record with `approved`, `approvedBy`,
 
 ## Scanner lab
 
-The scanner add-on is isolated from the Microsoft 365 service-side policies. Its pinned bootstrap verifies installer SHA-256 and Microsoft signatures, persists restart state, uses a dedicated local scanner service account, retrieves the app credential from Key Vault through the VM identity, and seeds only an empty dedicated share with a pinned synthetic corpus. It leaves enforcement, content labeling, relabeling, and default-label enforcement off. A completed discovery scan is not enforcement readiness: scanner label-condition mapping and manual-label behavior have no verified writer in the supported cmdlet surface and remain explicitly blocked.
+The scanner add-on is isolated from Microsoft 365 service-side auto-label policies. Create a Purview portal cluster and assign a discovery-only content scan job with repository `C:\PurviewScannerDemo\fixtures` **before deployment**. Supply its exact name in `scannerClusterName`; online configuration is the default. To connect an existing VM to a cluster such as `Az-Demo`, use `Connect-ScannerCluster.ps1` as documented in [scanner operations](extensions/scanner/README.md).
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Fx3nc0n%2Fpurview-ip-as-code%2Freleases%2Fdownload%2Fv1.0.0%2Fazuredeploy.json)
+The pinned bootstrap verifies SQL Express, Visual C++ runtime and client hashes/signatures, persists restart state, retrieves the app credential using the explicit VM managed identity, and seeds an empty local repository. Enforcement and labeling remain off. Discovery requires fresh reports covering every fixture, not simply an idle node. A completed scan does not establish detection accuracy or enforcement readiness.
 
-The button is pinned to the immutable `v1.0.0` release asset, not branch content or a mutable `latest` URL. The release workflow publishes the ARM template, bootstrap script, and fixture archive only after approval by the protected `scanner-release-approval` environment; those URLs remain unavailable until that review completes. Replace the remaining placeholders in [`extensions/scanner/infra/scanner.lab.parameters.example.json`](extensions/scanner/infra/scanner.lab.parameters.example.json) with approved installer URLs, tenant values, and SHA-256 values from the released `SHA256SUMS.txt` before deployment. The lab has no public RDP/SMB endpoint and uses a dedicated storage-account key only for synthetic demo data. A licensed delegated scanner identity, approved app registration and consent, Azure RBAC, network reachability, and a verified scanner/client compatibility profile remain operator prerequisites. See [`extensions/scanner/README.md`](extensions/scanner/README.md) before deployment.
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Fx3nc0n%2Fpurview-ip-as-code%2Freleases%2Fdownload%2Fv1.0.0-beta.1%2Fazuredeploy.json)
+
+The button is pinned to `v1.0.0-beta.1`, not branch content or a mutable `latest` URL. Release assets include the ARM template, bootstrap, cluster-connection helper, deterministic fixture archive, and `SHA256SUMS.txt`. Replace every placeholder in [the sample parameters](extensions/scanner/infra/scanner.lab.parameters.example.json) with approved installer URLs, cluster/tenant values and released hashes. The lab has no public RDP/SMB endpoint and disables storage shared-key authentication. Azure Files identity-based SMB is not configured; the scan uses the VM-local repository.
 
 No Azure resources are deployed by CI. The `deploy-demo` workflow is manually dispatched from the default branch and requires the `scanner-demo-approval` GitHub environment, an Azure OIDC identity, and an operator-supplied ARM-parameters JSON secret. This repository's environment requires review by the configured repository owner and is restricted to `main`; the release environment separately gates public assets to reviewed `v*` tags. Verify both protections before use. Forks must configure equivalent rules. The deployment workflow targets an already-existing resource group and never creates one.
 

@@ -445,6 +445,8 @@ function Get-PurviewAdapterCapability {
     else {
         $required = @{
             'Set-Authentication' = @('AppId', 'AppSecret', 'TenantId', 'DelegatedUser', 'OnBehalfOf')
+            'Get-ScannerConfiguration' = @()
+            'Set-ScannerConfiguration' = @('OnlineConfiguration')
             'Set-ScannerContentScan' = @('Enforce', 'DiscoverInformationTypes', 'LabelFilesByContent', 'RelabelFiles', 'EnforceDefaultLabel', 'EnableDlp')
             'Add-ScannerRepository' = @('Path')
             'Get-ScannerRepository' = @()
@@ -969,7 +971,7 @@ function Invoke-PurviewDeployment {
                 Set-Label -Identity $id -Priority $expected.Priority -ErrorAction Stop | Out-Null
             }
             catch {
-                # Purview manages global priority ranking; priority slot assignment is optional
+                Write-Warning "Purview did not accept the requested priority for managed label '$($label.key)'. Review tenant label ordering before activation. $($_.Exception.Message)"
             }
             $actions.Add([pscustomobject]@{ Key = $label.key; Kind = 'Label'; Status = 'Created'; Id = $id })
         }
@@ -1322,6 +1324,10 @@ function Set-PurviewScannerDiscovery {
     }
     if (-not (Test-Path -LiteralPath $RepositoryPath -PathType Container)) {
         throw "Scanner repository '$RepositoryPath' does not exist or is not reachable in this service context."
+    }
+    $scannerConfiguration = Get-ScannerConfiguration -ErrorAction Stop
+    if ([string]$scannerConfiguration.OnlineConfiguration -ne 'Off') {
+        throw 'Online scanner discovery must be configured in the content scan job assigned to the portal cluster. This helper only authors explicitly selected offline configuration; it will not switch modes.'
     }
     $configured = $false
     if ($PSCmdlet.ShouldProcess($RepositoryPath, 'Configure scanner discovery without enforcement or relabeling')) {

@@ -36,32 +36,30 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
         '10.40.0.0/16'
       ]
     }
-  }
-}
-
-resource vmSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' = {
-  parent: vnet
-  name: 'scanner-vm'
-  properties: {
-    addressPrefix: '10.40.1.0/24'
-    networkSecurityGroup: {
-      id: nsg.id
-    }
-  }
-}
-
-resource privateEndpointSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' = {
-  parent: vnet
-  name: 'private-endpoints'
-  properties: {
-    addressPrefix: '10.40.2.0/24'
-    privateEndpointNetworkPolicies: 'Disabled'
-    networkSecurityGroup: {
-      id: nsg.id
-    }
+    subnets: [
+      {
+        name: 'scanner-vm'
+        properties: {
+          addressPrefix: '10.40.1.0/24'
+          networkSecurityGroup: {
+            id: nsg.id
+          }
+        }
+      }
+      {
+        name: 'private-endpoints'
+        properties: {
+          addressPrefix: '10.40.2.0/24'
+          privateEndpointNetworkPolicies: 'Disabled'
+          networkSecurityGroup: {
+            id: nsg.id
+          }
+        }
+      }
+    ]
   }
 }
 
 output virtualNetworkId string = vnet.id
-output vmSubnetId string = vmSubnet.id
-output privateEndpointSubnetId string = privateEndpointSubnet.id
+output vmSubnetId string = resourceId('Microsoft.Network/virtualNetworks/subnets', vnet.name, 'scanner-vm')
+output privateEndpointSubnetId string = resourceId('Microsoft.Network/virtualNetworks/subnets', vnet.name, 'private-endpoints')

@@ -69,10 +69,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $assetDirectory = Join-Path $env:RUNNER_TEMP 'release-assets'
+          $releaseFlags = @()
+          if ($env:GITHUB_REF_NAME -match '^v\d+\.\d+\.\d+-') {
+            $releaseFlags += @('--prerelease', '--latest=false')
+          }
           gh release create $env:GITHUB_REF_NAME `
             (Join-Path $assetDirectory 'azuredeploy.json') `
             (Join-Path $assetDirectory 'Invoke-LabBootstrap.ps1') `
+            (Join-Path $assetDirectory 'Connect-ScannerCluster.ps1') `
             (Join-Path $assetDirectory 'demo-content.zip') `
             (Join-Path $assetDirectory 'SHA256SUMS.txt') `
-            --repo $env:GITHUB_REPOSITORY --verify-tag --generate-notes --title $env:GITHUB_REF_NAME
+            --repo $env:GITHUB_REPOSITORY --verify-tag --generate-notes --title $env:GITHUB_REF_NAME @releaseFlags
           if ($LASTEXITCODE -ne 0) { throw 'GitHub release creation failed.' }

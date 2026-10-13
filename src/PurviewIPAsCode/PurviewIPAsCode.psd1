@@ -1,6 +1,6 @@
 @{
     RootModule = 'PurviewIPAsCode.psm1'
-    ModuleVersion = '0.1.0'
+    ModuleVersion = '1.0.0'
     GUID = '16d0f5c2-5272-42bc-9ba9-0eb870912afa'
     Author = 'Purview IP as code contributors'
     Description = 'Offline-first configuration validation and guarded Microsoft Purview reconciliation.'
@@ -21,6 +21,7 @@
     AliasesToExport = @()
     PrivateData = @{
         PSData = @{
+            Prerelease = 'beta1'
             Tags = @('Purview', 'InformationProtection', 'InfrastructureAsCode')
             ProjectUri = 'https://github.com/x3nc0n/purview-ip-as-code'
         }

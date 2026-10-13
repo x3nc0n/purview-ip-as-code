@@ -5,20 +5,24 @@
     "labName": { "value": "pipascode" },
     "location": { "value": "REPLACE_WITH_APPROVED_REGION" },
     "ownerTag": { "value": "REPLACE_WITH_OWNER_ALIAS" },
-    "bootstrapArtifactUri": { "value": "https://github.com/x3nc0n/purview-ip-as-code/releases/download/v1.0.0/Invoke-LabBootstrap.ps1" },
+    "bootstrapArtifactUri": { "value": "https://github.com/x3nc0n/purview-ip-as-code/releases/download/v1.0.0-beta.1/Invoke-LabBootstrap.ps1" },
     "bootstrapSha256": { "value": "REPLACE_WITH_64_HEX_SHA256" },
     "sqlExpressInstallerUri": { "value": "REPLACE_WITH_APPROVED_VERSION_PINNED_MICROSOFT_URL" },
     "sqlExpressInstallerSha256": { "value": "REPLACE_WITH_64_HEX_SHA256" },
     "informationProtectionClientInstallerUri": { "value": "REPLACE_WITH_APPROVED_VERSION_PINNED_MICROSOFT_URL" },
     "informationProtectionClientInstallerSha256": { "value": "REPLACE_WITH_64_HEX_SHA256" },
-    "demoContentUri": { "value": "https://github.com/x3nc0n/purview-ip-as-code/releases/download/v1.0.0/demo-content.zip" },
+    "visualCppInstallerUri": { "value": "https://aka.ms/vs/17/release/vc_redist.x64.exe" },
+    "visualCppInstallerSha256": { "value": "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b" },
+    "demoContentUri": { "value": "https://github.com/x3nc0n/purview-ip-as-code/releases/download/v1.0.0-beta.1/demo-content.zip" },
     "demoContentSha256": { "value": "REPLACE_WITH_64_HEX_SHA256" },
     "scannerTenantId": { "value": "REPLACE_WITH_TENANT_ID" },
     "scannerAppId": { "value": "REPLACE_WITH_APPROVED_APP_ID" },
     "scannerDelegatedUser": { "value": "REPLACE_WITH_LICENSED_DELEGATED_USER_UPN" },
+    "scannerClusterName": { "value": "REPLACE_WITH_EXISTING_PURVIEW_CLUSTER_NAME" },
+    "scannerConfigurationMode": { "value": "Online" },
     "scannerAppSecret": { "value": "SUPPLY_FROM_PROTECTED_SECRET_STORE" },
     "vmAdminUsername": { "value": "REPLACE_WITH_LOCAL_ADMIN_NAME" },
     "vmAdminPassword": { "value": "SUPPLY_A_UNIQUE_RANDOM_SECRET" },
-    "vmSize": { "value": "Standard_D2s_v5" }
+    "vmSize": { "value": "Standard_D4s_v5" }
   }
 }

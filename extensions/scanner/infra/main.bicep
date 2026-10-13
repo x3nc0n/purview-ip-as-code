@@ -35,6 +35,14 @@ param informationProtectionClientInstallerUri string
 @maxLength(64)
 param informationProtectionClientInstallerSha256 string
 
+@description('Approved Microsoft Visual C++ x64 redistributable URL; content is pinned by SHA-256.')
+param visualCppInstallerUri string
+
+@description('Expected SHA-256 for the Visual C++ x64 redistributable.')
+@minLength(64)
+@maxLength(64)
+param visualCppInstallerSha256 string
+
 @description('Fixture ZIP from the same public release as this template.')
 param demoContentUri string
 
@@ -51,6 +59,17 @@ param scannerAppId string
 
 @description('Licensed delegated Entra user assigned scanner label policies.')
 param scannerDelegatedUser string
+
+@description('Exact name of the existing cluster created in the Purview portal before deployment.')
+@minLength(1)
+param scannerClusterName string
+
+@description('Online uses the portal cluster job. Offline is an explicitly selected disconnected lab mode.')
+@allowed([
+  'Online'
+  'Offline'
+])
+param scannerConfigurationMode string = 'Online'
 
 @secure()
 @description('Scanner app secret, stored only as a Key Vault secret.')
@@ -118,7 +137,6 @@ resource scannerIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
 module scannerVm 'modules/compute.bicep' = {
   name: 'scanner-vm'
   dependsOn: [
-    storageKeyRole
     vaultSecretsRole
   ]
   params: {
@@ -134,6 +152,8 @@ module scannerVm 'modules/compute.bicep' = {
     scannerTenantId: scannerTenantId
     scannerAppId: scannerAppId
     scannerDelegatedUser: scannerDelegatedUser
+    scannerClusterName: scannerClusterName
+    scannerConfigurationMode: scannerConfigurationMode
     identityResourceId: scannerIdentity.id
     identityClientId: scannerIdentity.properties.clientId
     bootstrapArtifactUri: bootstrapArtifactUri
@@ -142,31 +162,16 @@ module scannerVm 'modules/compute.bicep' = {
     sqlExpressInstallerSha256: sqlExpressInstallerSha256
     informationProtectionClientInstallerUri: informationProtectionClientInstallerUri
     informationProtectionClientInstallerSha256: informationProtectionClientInstallerSha256
+    visualCppInstallerUri: visualCppInstallerUri
+    visualCppInstallerSha256: visualCppInstallerSha256
     demoContentUri: demoContentUri
     demoContentSha256: demoContentSha256
     tags: tags
   }
 }
 
-resource storageResource 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
-  name: storageAccountName
-}
-
 resource vaultResource 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
-}
-
-resource storageKeyRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storageResource.id, 'storage-key-operator')
-  scope: storageResource
-  dependsOn: [
-    storage
-  ]
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '81a9662b-bebf-436f-a333-f67b29880f12')
-    principalId: scannerIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
 }
 
 resource vaultSecretsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {

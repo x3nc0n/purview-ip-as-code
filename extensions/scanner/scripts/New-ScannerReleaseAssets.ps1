@@ -32,12 +32,38 @@ try {
 
     Copy-Item -LiteralPath $compiledTemplate -Destination (Join-Path $destination 'azuredeploy.json') -Force
     Copy-Item -LiteralPath $bootstrapSource -Destination (Join-Path $destination 'Invoke-LabBootstrap.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Connect-ScannerCluster.ps1') -Destination (Join-Path $destination 'Connect-ScannerCluster.ps1') -Force
     [void](New-Item -ItemType Directory -Path (Join-Path $staging 'generated') -Force)
     Copy-Item -Path (Join-Path $generatedContent '*') -Destination (Join-Path $staging 'generated') -Recurse -Force
     Copy-Item -LiteralPath $fixtureManifest -Destination (Join-Path $staging 'fixtures.json') -Force
-    Compress-Archive -Path (Join-Path $staging '*') -DestinationPath (Join-Path $destination 'demo-content.zip') -CompressionLevel Optimal -Force
+    Add-Type -AssemblyName System.IO.Compression
+    $zipPath = Join-Path $destination 'demo-content.zip'
+    $zipStream = [System.IO.File]::Create($zipPath)
+    $archive = [System.IO.Compression.ZipArchive]::new($zipStream, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        $files = @(Get-ChildItem -LiteralPath (Join-Path $staging 'generated') -File -Recurse)
+        $files += Get-Item -LiteralPath (Join-Path $staging 'fixtures.json')
+        foreach ($file in ($files | Sort-Object FullName)) {
+            $entryName = $file.FullName.Substring($staging.Length + 1).Replace('\', '/')
+            $entry = $archive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+            $entry.LastWriteTime = [datetimeoffset]::new(2000, 1, 1, 0, 0, 0, [timespan]::Zero)
+            $entryStream = $entry.Open()
+            $sourceStream = [System.IO.File]::OpenRead($file.FullName)
+            try {
+                $sourceStream.CopyTo($entryStream)
+            }
+            finally {
+                $sourceStream.Dispose()
+                $entryStream.Dispose()
+            }
+        }
+    }
+    finally {
+        $archive.Dispose()
+        $zipStream.Dispose()
+    }
 
-    $assetNames = @('azuredeploy.json', 'Invoke-LabBootstrap.ps1', 'demo-content.zip')
+    $assetNames = @('azuredeploy.json', 'Invoke-LabBootstrap.ps1', 'Connect-ScannerCluster.ps1', 'demo-content.zip')
     $sumLines = foreach ($name in $assetNames) {
         $hash = (Get-FileHash -LiteralPath (Join-Path $destination $name) -Algorithm SHA256).Hash.ToLowerInvariant()
         "$hash  $name"

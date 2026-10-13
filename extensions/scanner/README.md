@@ -1,29 +1,63 @@
-# Private scanner demo
+# Private scanner demo (beta)
 
-This optional lab deploys an isolated Windows scanner host and a private Azure Files share containing only the released synthetic fixture corpus. It is not a production scanner deployment and does not label content.
+This add-on deploys a private Windows scanner VM, SQL Express, Key Vault, managed identity, and an Azure Files account/share. **The beta scans a local synthetic repository, not Azure Files.** Shared-key storage access is disabled; configuring identity-based SMB is outside this add-on. No production content or enforcement is supported.
 
-## Before deploying
+## Create the portal cluster and job first
 
-1. Read [`../../docs/prerequisites.md`](../../docs/prerequisites.md), [`../../docs/operations.md`](../../docs/operations.md), and [`../../docs/protection-gaps.md`](../../docs/protection-gaps.md).
-2. Push a reviewed `v*` tag and approve the protected `scanner-release-approval` environment. The release workflow builds `azuredeploy.json`, `Invoke-LabBootstrap.ps1`, `demo-content.zip`, and SHA-256 sums. The Deploy to Azure button points to the latest public release; do not use it until the release has been reviewed.
-3. Obtain the official, approved version-pinned SQL Express and Microsoft Information Protection client installers, and independently record their SHA-256 values. Bootstrap verifies both the expected hash and Microsoft's Authenticode signature.
-4. Prepare a licensed delegated Entra identity and app registration with the exact tenant consent/permissions required by the selected client. Tenant identity, licensing, app registration, admin consent, and certificate/app-secret issuance are not provisioned by ARM.
-5. Verify that `scanner-demo-approval` requires human review and restricts deployments to `main`, and that `scanner-release-approval` requires human review for `v*` tags. This repository has an owner reviewer configured for both. For a fork, recreate those rules. Add `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, and the complete deployment parameter document as environment secrets/variables as appropriate. The workflow uses an existing resource group; it never creates one.
-6. Review the template's scoped Storage Account Key Operator and Key Vault Secrets User grants, region-specific costs, egress, retention, recovery, and exact teardown target.
+In Microsoft Purview, open **Settings > Information Protection > Information protection scanner**. You need tenant permissions that expose this page; it is not the Data Map scanning UI.
 
-The standalone scanner bootstrap runs in 64-bit Windows PowerShell 5.1 to match the legacy scanner client. Offline repository authoring and tests use PowerShell 7.4 or newer.
+1. Create a **cluster** and record its exact name. The tested lab uses `Az-Demo`. Set `scannerClusterName` in the ARM parameters to the same value; installing the scanner does not create the portal cluster.
+2. Create a **content scan job**, assign it to that cluster, select manual scheduling and discovery of all information types, and explicitly disable enforcement, content-based labeling, relabeling, and default-label enforcement.
+3. Add repository `C:\PurviewScannerDemo\fixtures` to that job. This is a path on the scanner VM, not the operator workstation. Assigning a cluster without a job/repository does not make the node scan.
+4. Deploy with `scannerConfigurationMode=Online` (the default). The node connects using its configured cluster and authentication; confirm it appears under **Nodes** after the service starts and configuration propagates.
 
-For portal deployment, use the public **Deploy to Azure** button in the root README and supply a reviewed parameter file based on [`infra/scanner.lab.parameters.example.json`](infra/scanner.lab.parameters.example.json). Use release URLs and hashes that identify exact reviewed artifacts; the sample file is not deployable as-is.
+The cluster/job are Microsoft 365 configuration and are **not created by ARM**. Online configuration reads the portal job. `Set-ScannerContentScan` and `Add-ScannerRepository` are for explicitly selected `Offline` configuration; offline mode is not a substitute for portal cluster registration.
 
-## Bootstrap behavior
+## Connect an already installed node
 
-The Custom Script Extension verifies the release bootstrap SHA-256. The script validates pinned HTTPS downloads, package hashes, Microsoft signatures, Windows Server Desktop Experience, and installed runtime cmdlet parameters. Installer exit code 3010 schedules a LocalSystem startup continuation. Scanner app credentials are fetched from private Key Vault using the VM's user-assigned managed identity. The credentialed scanner service account configures its own profile, stores the storage key in Windows Credential Manager, verifies private SMB/DNS access, and seeds only an empty dedicated fixture folder with an exact release marker.
+Do not uninstall the scanner or redeploy the VM just to change cluster membership. In elevated **64-bit Windows PowerShell 5.1 on the node**, use:
 
-The script refuses to overwrite unknown share contents or silently reset a service-account password. Recovery state contains only booleans, counts, paths, timestamps, and sanitized diagnostic codes. See `C:\ProgramData\PurviewIPAsCode\readiness.json` on the VM.
+```powershell
+$credential = Get-Credential "$env:COMPUTERNAME\PurviewScannerSvc"
+.\Connect-ScannerCluster.ps1 -ClusterName 'Az-Demo' -ServiceUserCredentials $credential
+Get-ScannerConfiguration
+Get-Service MIPScanner
+```
 
-## Discovery-only stop
+The helper calls `Set-ScannerDatabase -Cluster` with the existing SQL instance and service credentials, switches `Set-ScannerConfiguration -OnlineConfiguration On`, restarts the scanner, and verifies the resulting configuration. It leaves the old SQL database intact; do not delete it before reviewing retention and recovery. Existing authentication must remain valid. The helper resets discovery readiness because a previous offline scan does not validate the new cluster.
 
-The scanner content-scan configuration is explicitly:
+Expect `Cluster: Az-Demo`, `OnlineConfiguration: On`, database `AIPScannerUL_Az-Demo`, and a running `MIPScanner` service. Confirm the node in the portal separately: local configuration alone does not prove cloud registration or job assignment.
+
+After the assigned job has propagated, in an elevated service-account session:
+
+```powershell
+Get-ScannerContentScan
+Get-ScannerRepository
+Start-Scan
+Get-ScanStatus
+```
+
+Keep every enforcement/labeling switch off. If repositories are empty or the content-scan switches are blank, finish assigning the portal job; do not force offline mode to hide the problem. The helper does not start a scan or modify the portal job.
+
+## Deployment prerequisites
+
+- Read [prerequisites](../../docs/prerequisites.md), [operations](../../docs/operations.md), and [protection gaps](../../docs/protection-gaps.md).
+- Use an existing authorized resource group and approved region. Review costs, quotas, network egress and tenant permissions.
+- Prepare a licensed delegated Entra user and an approved scanner app with admin consent. The tested app uses Azure Rights Management `Content.DelegatedReader` and `Content.DelegatedWriter`, and Microsoft Information Protection Sync Service `UnifiedPolicy.Tenant.Read` application permissions. Verify these against the selected client and Microsoft's current scanner requirements.
+- Supply an app secret through a protected parameter store. ARM stores it in private Key Vault. Only the VM's explicitly selected user-assigned identity receives Key Vault Secrets User access. There is no storage-key operator grant.
+- Obtain approved SQL Express, Purview Information Protection client, and Visual C++ x64 redistributable URLs and SHA-256 hashes. The sample pins VC++ 14.44.35211; its vendor URL is mutable, but a changed hash fails closed. The bootstrap also verifies Microsoft's Authenticode signatures.
+- Use the `v1.0.0-beta.1` assets and hashes from `SHA256SUMS.txt`; replace every placeholder in [the sample parameters](infra/scanner.lab.parameters.example.json). Templates from earlier lab releases do not include the cluster/runtime contract and cannot be mixed with the beta bootstrap.
+- GitHub deployment requires OIDC and the protected `scanner-demo-approval` environment. Tag-built releases use `scanner-release-approval`. Administrators must configure required reviewers and branch/tag restrictions; YAML alone does not enforce review.
+
+## Bootstrap and readiness
+
+The Custom Script Extension verifies the bootstrap hash. Bootstrap validates package hashes/signatures, Windows Server Desktop Experience and installed runtime cmdlet parameters; installer exit code 3010 schedules a LocalSystem restart continuation. It installs SQL Express, the current pinned VC++ runtime, and the client, then installs or reconnects the scanner to the supplied cluster.
+
+An elevated scheduled worker configures authentication in the dedicated service account's profile using `Set-Authentication -OnBehalfOf`. Administrator membership added by bootstrap is temporary and removed in cleanup. The protected state directory contains the machine-DPAPI service password; do not export it.
+
+The pinned archive seeds an empty local fixture directory. Its marker and manifest live outside the scanned folder. Unknown or mismatched contents fail closed. Fixture archives are deterministic and contain only `generated/` and `fixtures.json`, not ARM files.
+
+Online bootstrap requires an assigned discovery-only portal job and the exact repository. Offline mode creates its own local job with:
 
 ```text
 Enforce Off
@@ -34,21 +68,16 @@ RelabelFiles Off
 EnforceDefaultLabel Off
 ```
 
-Bootstrap requires an observed, completed scanner cycle and then records `discoveryComplete=true`, `enforcementEnabled=false`, `scannerLabelConditionsSupported=false`, and `readyForEnforcement=false`. The scan is bounded to 90 minutes. A completed discovery run does not prove all fixtures matched; retain the manifest and compare scanner results manually without exporting document contents.
+Within 90 minutes, bootstrap requires an idle node **and fresh summary/detailed reports covering every fixture with zero failures**. An idle node or elapsed timer alone never sets `discoveryComplete=true`. Reports remain under the service account's `%LOCALAPPDATA%\Microsoft\MSIP\Scanner\Reports`; worker output and `readiness.json` remain under `C:\ProgramData\PurviewIPAsCode`.
 
-`scripts/Enable-ScannerProtection.ps1` is deliberately fail-closed. The documented cmdlet surface does not provide a verified label-condition adapter, and approval alone cannot change that. Do not edit scanner settings to enable enforcement or relabeling as a workaround.
+Readiness keeps provisioning, software, authentication, seeding and discovery separate. Successful discovery clears stale failure codes but leaves enforcement and enforcement readiness false. Compare sensitive-information-type results against the fixture manifest separately; a completed scan does not prove expected detections. `Enable-ScannerProtection.ps1` remains deliberately fail-closed.
 
-## Network and cost
+## Network, recovery and teardown
 
-The template creates a dedicated VNet, VM and private-endpoint subnets, private DNS for Azure Files and Key Vault, private endpoints, a dedicated storage account/share, a vault, and a non-Core Windows Server VM. It creates no public IP, RDP rule, or public SMB endpoint. HTTPS egress is required for package acquisition and Microsoft services. Azure Files uses SMB3.1.1 over the private endpoint and shared-key authentication for synthetic fixtures only.
+Both subnets have an NSG. Storage and Key Vault use private endpoints/DNS and disable public access. There is no public IP or inbound RDP/SMB rule. Outbound HTTPS is needed for approved packages and Microsoft services. The Azure Files share is provisioned but not mounted or populated by this bootstrap.
 
-Compute, managed disk, Azure Files, private endpoints, Key Vault, and data processing incur region-specific charges. Estimate current pricing and quotas in the intended subscription before approving deployment; this repo does not make a cost estimate or verify quota. Keep the lab short-lived.
+Subnets are declared inline to preserve them on VNet redeployment; do not delete a resource group merely to update the scanner. Review ARM what-if before changes. A deleted purge-protected Key Vault name cannot simply be reused: recover it according to organizational procedures or choose a new `labName`.
 
-## Teardown
+After an extension failure, inspect worker output, readiness, and local scanner events before retrying the verified bootstrap. Correcting the node via Run Command does not retroactively change a failed ARM deployment record. Preserve sanitized evidence and then delete only the exact dedicated resource group after confirming it contains no unrelated resources. Compute, disks, private endpoints, storage and Key Vault remain billable until teardown.
 
-After the scan, preserve the sanitized readiness report and delete only the dedicated lab resource group after verifying its exact contents and name. Do not assume Key Vault secrets are immediately purged: soft-delete retention and purge protection are enabled. Follow organizational recovery and purge procedures; no cleanup workflow deletes resources automatically.
-
-## Policy-restricted subscriptions (lab note)
-
-When the subscription blocks storage shared-key auth and public access, the bootstrap seeds a local repository (C:\PurviewScannerDemo) instead of mounting Azure Files, configures the scanner offline, and runs the service-context worker as an elevated scheduled task. The template adds an NSG to the private-endpoint subnet, disables shared-key access, and passes the managed identity client ID to the VM. Reuse of a purge-protected Key Vault name requires a new labName; redeploy over an existing VNet requires deleting the resource group.
-
+Reference: [Set-ScannerDatabase](https://learn.microsoft.com/powershell/module/purviewinformationprotection/set-scannerdatabase?view=azureipps).

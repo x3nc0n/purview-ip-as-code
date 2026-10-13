@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "12052103972186823632"
+      "templateHash": "11169124619836277808"
     }
   },
   "parameters": {
@@ -73,6 +73,20 @@
         "description": "Expected SHA-256 for the Information Protection client installer."
       }
     },
+    "visualCppInstallerUri": {
+      "type": "string",
+      "metadata": {
+        "description": "Approved Microsoft Visual C++ x64 redistributable URL; content is pinned by SHA-256."
+      }
+    },
+    "visualCppInstallerSha256": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "metadata": {
+        "description": "Expected SHA-256 for the Visual C++ x64 redistributable."
+      }
+    },
     "demoContentUri": {
       "type": "string",
       "metadata": {
@@ -103,6 +117,24 @@
       "type": "string",
       "metadata": {
         "description": "Licensed delegated Entra user assigned scanner label policies."
+      }
+    },
+    "scannerClusterName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Exact name of the existing cluster created in the Purview portal before deployment."
+      }
+    },
+    "scannerConfigurationMode": {
+      "type": "string",
+      "defaultValue": "Online",
+      "allowedValues": [
+        "Online",
+        "Offline"
+      ],
+      "metadata": {
+        "description": "Online uses the portal cluster job. Offline is an explicitly selected disconnected lab mode."
       }
     },
     "scannerAppSecret": {
@@ -154,21 +186,6 @@
     {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
-      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'storage-key-operator')]",
-      "properties": {
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '81a9662b-bebf-436f-a333-f67b29880f12')]",
-        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName'))), '2023-01-31').principalId]",
-        "principalType": "ServicePrincipal"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName')))]",
-        "[resourceId('Microsoft.Resources/deployments', 'scanner-storage')]"
-      ]
-    },
-    {
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
       "scope": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
       "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), 'key-vault-secrets-user')]",
       "properties": {
@@ -208,7 +225,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "15494072514188550995"
+              "templateHash": "11049666008900359965"
             }
           },
           "parameters": {
@@ -259,38 +276,31 @@
                   "addressPrefixes": [
                     "10.40.0.0/16"
                   ]
-                }
-              }
-            },
-            {
-              "type": "Microsoft.Network/virtualNetworks/subnets",
-              "apiVersion": "2023-09-01",
-              "name": "[format('{0}/{1}', format('{0}-vnet', parameters('labName')), 'scanner-vm')]",
-              "properties": {
-                "addressPrefix": "10.40.1.0/24",
-                "networkSecurityGroup": {
-                  "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('labName')))]"
-                }
+                },
+                "subnets": [
+                  {
+                    "name": "scanner-vm",
+                    "properties": {
+                      "addressPrefix": "10.40.1.0/24",
+                      "networkSecurityGroup": {
+                        "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('labName')))]"
+                      }
+                    }
+                  },
+                  {
+                    "name": "private-endpoints",
+                    "properties": {
+                      "addressPrefix": "10.40.2.0/24",
+                      "privateEndpointNetworkPolicies": "Disabled",
+                      "networkSecurityGroup": {
+                        "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('labName')))]"
+                      }
+                    }
+                  }
+                ]
               },
               "dependsOn": [
-                "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('labName')))]",
-                "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('labName')))]"
-              ]
-            },
-            {
-              "type": "Microsoft.Network/virtualNetworks/subnets",
-              "apiVersion": "2023-09-01",
-              "name": "[format('{0}/{1}', format('{0}-vnet', parameters('labName')), 'private-endpoints')]",
-              "properties": {
-                "addressPrefix": "10.40.2.0/24",
-                "privateEndpointNetworkPolicies": "Disabled",
-                "networkSecurityGroup": {
-                  "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('labName')))]"
-                }
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('labName')))]",
-                "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('labName')))]"
+                "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('labName')))]"
               ]
             }
           ],
@@ -744,6 +754,12 @@
           "scannerDelegatedUser": {
             "value": "[parameters('scannerDelegatedUser')]"
           },
+          "scannerClusterName": {
+            "value": "[parameters('scannerClusterName')]"
+          },
+          "scannerConfigurationMode": {
+            "value": "[parameters('scannerConfigurationMode')]"
+          },
           "identityResourceId": {
             "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName')))]"
           },
@@ -768,6 +784,12 @@
           "informationProtectionClientInstallerSha256": {
             "value": "[parameters('informationProtectionClientInstallerSha256')]"
           },
+          "visualCppInstallerUri": {
+            "value": "[parameters('visualCppInstallerUri')]"
+          },
+          "visualCppInstallerSha256": {
+            "value": "[parameters('visualCppInstallerSha256')]"
+          },
           "demoContentUri": {
             "value": "[parameters('demoContentUri')]"
           },
@@ -785,7 +807,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "11256905666117666855"
+              "templateHash": "606773812778742483"
             }
           },
           "parameters": {
@@ -825,6 +847,12 @@
             "scannerDelegatedUser": {
               "type": "string"
             },
+            "scannerClusterName": {
+              "type": "string"
+            },
+            "scannerConfigurationMode": {
+              "type": "string"
+            },
             "identityResourceId": {
               "type": "string"
             },
@@ -849,6 +877,12 @@
             "informationProtectionClientInstallerSha256": {
               "type": "string"
             },
+            "visualCppInstallerUri": {
+              "type": "string"
+            },
+            "visualCppInstallerSha256": {
+              "type": "string"
+            },
             "demoContentUri": {
               "type": "string"
             },
@@ -860,7 +894,7 @@
             }
           },
           "variables": {
-            "bootstrapParametersBase64": "[base64(string(createObject('tenantId', parameters('scannerTenantId'), 'appId', parameters('scannerAppId'), 'delegatedUser', parameters('scannerDelegatedUser'), 'vaultUri', parameters('keyVaultUri'), 'managedIdentityClientId', parameters('identityClientId'), 'storageAccountName', parameters('storageAccountName'), 'shareName', parameters('fileShareName'), 'sqlExpressUri', parameters('sqlExpressInstallerUri'), 'sqlExpressSha256', parameters('sqlExpressInstallerSha256'), 'clientUri', parameters('informationProtectionClientInstallerUri'), 'clientSha256', parameters('informationProtectionClientInstallerSha256'), 'fixtureUri', parameters('demoContentUri'), 'fixtureSha256', parameters('demoContentSha256'))))]",
+            "bootstrapParametersBase64": "[base64(string(createObject('tenantId', parameters('scannerTenantId'), 'appId', parameters('scannerAppId'), 'delegatedUser', parameters('scannerDelegatedUser'), 'clusterName', parameters('scannerClusterName'), 'configurationMode', parameters('scannerConfigurationMode'), 'vaultUri', parameters('keyVaultUri'), 'managedIdentityClientId', parameters('identityClientId'), 'storageAccountName', parameters('storageAccountName'), 'shareName', parameters('fileShareName'), 'sqlExpressUri', parameters('sqlExpressInstallerUri'), 'sqlExpressSha256', parameters('sqlExpressInstallerSha256'), 'clientUri', parameters('informationProtectionClientInstallerUri'), 'clientSha256', parameters('informationProtectionClientInstallerSha256'), 'visualCppUri', parameters('visualCppInstallerUri'), 'visualCppSha256', parameters('visualCppInstallerSha256'), 'fixtureUri', parameters('demoContentUri'), 'fixtureSha256', parameters('demoContentSha256'))))]",
             "bootstrapSha256Base64": "[base64(parameters('bootstrapSha256'))]",
             "bootstrapCommand": "[format('powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference=''Stop'';$expected=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(''{0}''));if((Get-FileHash -LiteralPath .\\Invoke-LabBootstrap.ps1 -Algorithm SHA256).Hash -ne $expected){{throw ''Bootstrap SHA-256 verification failed.''}};& .\\Invoke-LabBootstrap.ps1 -BootstrapParametersBase64 ''{1}'' -VerifyBootstrapSha256 $expected\"', variables('bootstrapSha256Base64'), variables('bootstrapParametersBase64'))]"
           },
@@ -983,7 +1017,6 @@
         "[resourceId('Microsoft.Resources/deployments', 'scanner-network')]",
         "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName')))]",
         "[resourceId('Microsoft.Resources/deployments', 'scanner-storage')]",
-        "[extensionResourceId(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'storage-key-operator'))]",
         "[resourceId('Microsoft.Resources/deployments', 'scanner-vault')]",
         "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), 'key-vault-secrets-user'))]"
       ]
