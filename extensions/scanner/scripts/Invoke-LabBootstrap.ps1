@@ -505,6 +505,7 @@ function Invoke-ServiceContextConfiguration {
     # SMB credential provisioning is intentionally skipped:  -Password $storageSecureKey
 
     $protected = Get-Content -LiteralPath $passwordPath -Raw -Encoding utf8
+    Initialize-CredentialStore
     $servicePassword = [PurviewIPAsCode.CredentialStore]::UnprotectMachineSecret($protected)
     $serviceSecurePassword = [PurviewIPAsCode.CredentialStore]::ToSecureString($servicePassword)
     $servicePassword = $null
