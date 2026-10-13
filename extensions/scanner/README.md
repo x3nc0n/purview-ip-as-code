@@ -112,6 +112,31 @@ as the scanner service identity before assigning the UNC to an online content
 scan job. A managed identity/token for HTTPS storage access is not automatically
 an SMB logon identity. Keep public network and shared-key access disabled.
 
+### Managed-identity SMB and the local scanner account
+
+Microsoft now documents [managed-identity SMB for workgroup Windows clients](https://learn.microsoft.com/en-us/azure/storage/files/files-managed-identities).
+It requires storage `SMBOAuth` enablement, SMB Kerberos support, the documented
+`Storage File Data SMB MI Admin` role, and the `AzFilesSmbMIClient` client.
+That role includes write/delete/permission-management powers; it is not a
+discovery-only reader grant. Review the scope and privileges before enabling it.
+Explicitly select the user-assigned client ID when the VM has multiple identities.
+
+The published client inserts the Kerberos ticket into its process's Windows
+logon session. A task running under the same username is not evidence that it
+shares the scanner service's session. Its `refresh` command remains running
+only for the requested duration (`--expiry` defaults to 86400 seconds); it is not
+an automatically installed permanent refresh service.
+
+Run `scripts\Test-ScannerSmbAuthContext.ps1` elevated on a running node to compare
+the caller and scanner process logon sessions. It is read-only and explicitly
+reports that authentication is not configured. This add-on has no validated
+integration to acquire and renew managed-identity tickets in the
+`MIPScanner` logon session. Do not claim scanner access from a successful mount
+under an administrator, SYSTEM, or separate scheduled task. No service-account
+migration, token injection, credential caching or elevated refresh worker is
+performed by this preflight. A complete implementation must demonstrate access
+from the actual scanner service and survive ticket expiry and service restarts.
+
 ## Network, recovery and teardown
 
 Both subnets have an NSG. Storage and Key Vault use private endpoints/DNS and disable public access. There is no public IP or inbound RDP/SMB rule. Outbound HTTPS is needed for approved packages and Microsoft services. The Azure Files share is provisioned but not mounted or populated by this bootstrap.

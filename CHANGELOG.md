@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Adds a read-only scanner SMB logon-session diagnostic. Documents current managed-identity SMB support and the unimplemented scanner-service ticket refresh integration; does not claim a successful administrative mount grants scanner access.
 - Adds a standalone private endpoint/DNS connection template for an existing Azure Files account and exact-IP DNS/TCP 445 verification on the scanner VM. This does not configure SMB authentication or alter beta release assets.
 - Consolidates nine service-side auto-label policies into four, preserving configured locations, SSN 1-199/200+ tiers, BES precedence, and Exchange Do Not Forward. Each policy still applies one fixed label. Purview requires single-workload rules; all three configured workloads produce 15 rules within those four policies.
 - Adds multi-workload definitions and a guarded, backup-first retirement helper for inventory-owned legacy simulation policies. Normal apply remains non-destructive; activation remains separately gated.
