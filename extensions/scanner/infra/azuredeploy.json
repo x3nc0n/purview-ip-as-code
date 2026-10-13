@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "10663228633497983116"
+      "templateHash": "5111445259943191494"
     }
   },
   "parameters": {
@@ -206,7 +206,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "13424270228154082632"
+              "templateHash": "15494072514188550995"
             }
           },
           "parameters": {
@@ -281,9 +281,13 @@
               "name": "[format('{0}/{1}', format('{0}-vnet', parameters('labName')), 'private-endpoints')]",
               "properties": {
                 "addressPrefix": "10.40.2.0/24",
-                "privateEndpointNetworkPolicies": "Disabled"
+                "privateEndpointNetworkPolicies": "Disabled",
+                "networkSecurityGroup": {
+                  "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('labName')))]"
+                }
               },
               "dependsOn": [
+                "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('labName')))]",
                 "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('labName')))]"
               ]
             }
@@ -338,7 +342,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "2591248085490923988"
+              "templateHash": "12681377451007372732"
             }
           },
           "parameters": {
@@ -376,7 +380,7 @@
                 "supportsHttpsTrafficOnly": true,
                 "minimumTlsVersion": "TLS1_2",
                 "allowBlobPublicAccess": false,
-                "allowSharedKeyAccess": true,
+                "allowSharedKeyAccess": false,
                 "publicNetworkAccess": "Disabled",
                 "networkAcls": {
                   "bypass": "None",

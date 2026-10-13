@@ -56,6 +56,9 @@ resource privateEndpointSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-0
   properties: {
     addressPrefix: '10.40.2.0/24'
     privateEndpointNetworkPolicies: 'Disabled'
+    networkSecurityGroup: {
+      id: nsg.id
+    }
   }
 }
 
