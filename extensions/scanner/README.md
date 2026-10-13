@@ -47,3 +47,8 @@ Compute, managed disk, Azure Files, private endpoints, Key Vault, and data proce
 ## Teardown
 
 After the scan, preserve the sanitized readiness report and delete only the dedicated lab resource group after verifying its exact contents and name. Do not assume Key Vault secrets are immediately purged: soft-delete retention and purge protection are enabled. Follow organizational recovery and purge procedures; no cleanup workflow deletes resources automatically.
+
+## Policy-restricted subscriptions (lab note)
+
+When the subscription blocks storage shared-key auth and public access, the bootstrap seeds a local repository (C:\PurviewScannerDemo) instead of mounting Azure Files, configures the scanner offline, and runs the service-context worker as an elevated scheduled task. The template adds an NSG to the private-endpoint subnet, disables shared-key access, and passes the managed identity client ID to the VM. Reuse of a purge-protected Key Vault name requires a new labName; redeploy over an existing VNet requires deleting the resource group.
+
