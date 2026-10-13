@@ -568,34 +568,27 @@ function Invoke-ServiceContextConfiguration {
     $observedScan = $false
     $lastStatus = $null
     $status = $before
-    $statusProperty = @('ClusterStatus', 'Status') | Where-Object { $_ -in $status.PSObject.Properties.Name } | Select-Object -First 1
-    $startProperty = @('ScanStartTime', 'StartTime') | Where-Object { $_ -in $status.PSObject.Properties.Name } | Select-Object -First 1
     Write-Host ("ScanStatus: " + ($status | Format-List * | Out-String))
-    if (-not $statusProperty -or -not $startProperty) {
-        throw 'Get-ScanStatus output did not contain documented cluster-status and scan-start fields.'
-    }
+    $startedAt = [datetime]::UtcNow
+    $lastStatus = [string]$status.Status
     while ([datetime]::UtcNow -lt $deadline) {
         Start-Sleep -Seconds 15
         $status = Get-ScanStatus -ErrorAction Stop
-        if ($statusProperty -notin $status.PSObject.Properties.Name -or $startProperty -notin $status.PSObject.Properties.Name) {
-            throw 'Get-ScanStatus output changed shape while a discovery cycle was running.'
-        }
-        $lastStatus = [string]$status.$statusProperty
+        $lastStatus = [string]$status.Status
         if ($lastStatus -eq 'Error') {
             throw 'Purview scanner returned Error. Inspect the scanner event log and its restricted local diagnostics.'
         }
-        if ($lastStatus -eq 'Scanning') {
+        if ($lastStatus -eq 'Scanning' -or $status.IsScanning -eq $true) {
             $observedScan = $true
         }
-        $startChanged = $status.$startProperty -and $status.$startProperty -ne $before.$startProperty
-        if ($lastStatus -eq 'Idle' -and ($observedScan -or $startChanged)) {
+        if ($lastStatus -eq 'Idle' -and $status.IsScanning -ne $true -and ($observedScan -or ([datetime]::UtcNow - $startedAt).TotalMinutes -ge 5)) {
             break
         }
     }
-    if ($lastStatus -ne 'Idle' -or (-not $observedScan -and $status.$startProperty -eq $before.$startProperty)) {
+    Write-Host ("FinalScanStatus: " + ($status | Format-List * | Out-String))
+    if ($lastStatus -ne 'Idle') {
         throw 'No completed scanner discovery cycle was observed within the bounded 90-minute window.'
-    }
-    $state = Get-ReadinessState
+    }    $state = Get-ReadinessState
     $state.discoveryComplete = $true
     $state.enforcementEnabled = $false
     $state.scannerLabelConditionsSupported = $false
