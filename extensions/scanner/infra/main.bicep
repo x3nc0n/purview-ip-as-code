@@ -158,6 +158,9 @@ resource vaultResource 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
 resource storageKeyRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(storageResource.id, 'storage-key-operator')
   scope: storageResource
+  dependsOn: [
+    storage
+  ]
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '81a9662b-bebf-436f-a333-f67b29880f12')
     principalId: scannerIdentity.properties.principalId
@@ -168,6 +171,9 @@ resource storageKeyRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 resource vaultSecretsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(vaultResource.id, 'key-vault-secrets-user')
   scope: vaultResource
+  dependsOn: [
+    vault
+  ]
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
     principalId: scannerIdentity.properties.principalId

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "5111445259943191494"
+      "templateHash": "17839099723577753935"
     }
   },
   "parameters": {
@@ -162,7 +162,8 @@
         "principalType": "ServicePrincipal"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName')))]"
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName')))]",
+        "[resourceId('Microsoft.Resources/deployments', 'scanner-storage')]"
       ]
     },
     {
@@ -176,7 +177,8 @@
         "principalType": "ServicePrincipal"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName')))]"
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-scanner-identity', parameters('labName')))]",
+        "[resourceId('Microsoft.Resources/deployments', 'scanner-vault')]"
       ]
     },
     {
