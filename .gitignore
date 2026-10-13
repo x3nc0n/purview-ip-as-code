@@ -1,4 +1,5 @@
 .purview-state/
+.azure/deployment-plan.md
 __pycache__/
 *.py[cod]
 testResults.xml

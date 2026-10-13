@@ -72,6 +72,46 @@ Within 90 minutes, bootstrap requires an idle node **and fresh summary/detailed 
 
 Readiness keeps provisioning, software, authentication, seeding and discovery separate. Successful discovery clears stale failure codes but leaves enforcement and enforcement readiness false. Compare sensitive-information-type results against the fixture manifest separately; a completed scan does not prove expected detections. `Enable-ScannerProtection.ps1` remains deliberately fail-closed.
 
+## Connect an existing Azure Files account privately
+
+`infra\connect-existing-files.bicep` is a separate, incremental connection template.
+It adds a dedicated `file` private endpoint in the scanner's existing endpoint
+subnet and a DNS zone group referencing the existing scanner-linked
+`privatelink.file.core.windows.net` zone. It does not redeploy the VM, VNet,
+storage account or bootstrap, change storage access settings, or peer networks.
+The endpoint connects to the account, not just one share; share permissions still
+control access. A private endpoint has ongoing charges.
+
+```powershell
+az deployment group what-if --subscription <subscription-id> --resource-group <scanner-resource-group> --template-file .\extensions\scanner\infra\connect-existing-files.bicep --parameters location=<scanner-region> storageAccountId=<existing-account-id> privateEndpointSubnetId=<scanner-endpoint-subnet-id> filePrivateDnsZoneId=<scanner-linked-zone-id> privateEndpointName=<dedicated-endpoint-name>
+# After reviewing an additive-only plan, use the same parameters with:
+az deployment group create --mode Incremental --subscription <subscription-id> --resource-group <scanner-resource-group> --template-file .\extensions\scanner\infra\connect-existing-files.bicep --parameters location=<scanner-region> storageAccountId=<existing-account-id> privateEndpointSubnetId=<scanner-endpoint-subnet-id> filePrivateDnsZoneId=<scanner-linked-zone-id> privateEndpointName=<dedicated-endpoint-name>
+```
+
+Check that the existing zone is linked to the scanner VNet, its DNS configuration
+uses that zone, and its NSG/routes allow TCP 445 to the endpoint. Do not replace a
+working zone link or modify a shared VNet unnecessarily. Verify the endpoint
+connection is `Approved`, then find its private IP on its managed NIC. On the
+scanner VM, run:
+
+```powershell
+.\Test-ScannerFileConnectivity.ps1 -StorageAccountName <account-name> -ExpectedPrivateEndpointIp <endpoint-ip>
+```
+
+On a repeat what-if, the DNS zone group may show a `Modify` that only removes
+provider-generated `etag`, `id`, `type`, or `provisioningState` metadata. Inspect
+the delta and ensure the configured zone ID is unchanged; do not add read-only
+metadata to the template to silence that preview.
+
+This requires the normal `<account>.file.core.windows.net` hostname to resolve
+to the exact private endpoint and verifies TCP 445. Continue using that hostname
+in the UNC, not the IP address or `privatelink` hostname. A network-only check
+does not mount the share, validate SMB credentials or start a scan. Configure
+supported identity-based SMB, share RBAC and filesystem ACLs, and verify access
+as the scanner service identity before assigning the UNC to an online content
+scan job. A managed identity/token for HTTPS storage access is not automatically
+an SMB logon identity. Keep public network and shared-key access disabled.
+
 ## Network, recovery and teardown
 
 Both subnets have an NSG. Storage and Key Vault use private endpoints/DNS and disable public access. There is no public IP or inbound RDP/SMB rule. Outbound HTTPS is needed for approved packages and Microsoft services. The Azure Files share is provisioned but not mounted or populated by this bootstrap.

@@ -71,6 +71,8 @@ The pinned bootstrap verifies SQL Express, Visual C++ runtime and client hashes/
 
 The button is pinned to `v1.0.0-beta.1`, not branch content or a mutable `latest` URL. Release assets include the ARM template, bootstrap, cluster-connection helper, deterministic fixture archive, and `SHA256SUMS.txt`. Replace every placeholder in [the sample parameters](extensions/scanner/infra/scanner.lab.parameters.example.json) with approved installer URLs, cluster/tenant values and released hashes. The lab has no public RDP/SMB endpoint and disables storage shared-key authentication. Azure Files identity-based SMB is not configured; the scan uses the VM-local repository.
 
+For an existing Azure Files account, the separate [private connectivity template](extensions/scanner/README.md#connect-an-existing-azure-files-account-privately) adds a file private endpoint and DNS association without redeploying the VM or storage account. Network reachability does not establish authenticated SMB access or scanner readiness.
+
 No Azure resources are deployed by CI. The `deploy-demo` workflow is manually dispatched from the default branch and requires the `scanner-demo-approval` GitHub environment, an Azure OIDC identity, and an operator-supplied ARM-parameters JSON secret. This repository's environment requires review by the configured repository owner and is restricted to `main`; the release environment separately gates public assets to reviewed `v*` tags. Verify both protections before use. Forks must configure equivalent rules. The deployment workflow targets an already-existing resource group and never creates one.
 
 ## Safety and scope

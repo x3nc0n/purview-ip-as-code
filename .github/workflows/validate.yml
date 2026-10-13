@@ -77,3 +77,5 @@ jobs:
           if ([Convert]::ToBase64String($compiled) -ne [Convert]::ToBase64String($committed)) {
             throw 'Compiled ARM JSON differs from the committed release template.'
           }
+          az bicep build --file extensions/scanner/infra/connect-existing-files.bicep --outfile $env:RUNNER_TEMP/connect-existing-files.json
+          if ($LASTEXITCODE -ne 0) { throw 'Existing Azure Files connection template compilation failed.' }
