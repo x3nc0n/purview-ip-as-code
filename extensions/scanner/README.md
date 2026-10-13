@@ -137,6 +137,40 @@ migration, token injection, credential caching or elevated refresh worker is
 performed by this preflight. A complete implementation must demonstrate access
 from the actual scanner service and survive ticket expiry and service restarts.
 
+## Optional tiny Windows VM and workday scheduling
+
+`infra\tiny-windows-vm.bicep` provisions a standalone Windows Server 2022 Gen2
+VM and NIC in an existing private subnet. It does **not** install AD DS, promote
+a domain controller, install Cloud Sync, join the scanner to a domain, or
+configure Azure Files authentication. Review SKU availability and pin the image
+version before deploying. The default B2als_v2 is x64, 2 vCPU / 4 GiB. Its
+Standard HDD OS disk remains billable when the VM is deallocated. Before future
+AD promotion, design a separate persistent AD database/log disk with host caching
+disabled and appropriate backup; the current OS-only VM is not a ready domain controller.
+
+Use `infra\tiny-windows-vm.parameters.example.json` with reviewed values and an
+approved secure password source. Its Key Vault reference requires a vault
+configured for ARM template deployment and the appropriate deployment permissions;
+the template neither creates nor changes that vault. Never commit a password or
+operational parameter file. Validate and inspect an incremental ARM what-if
+before deployment. No public IP or NSG rule is created; manage the guest using an
+authorized private connection or Azure VM Run Command.
+
+Both this template and the current scanner template tag VMs
+`start-stop=workday`. A tag alone does not install a scheduler: verify the
+existing StartStop deployment's profile, target subscription and start/deallocate
+permissions. The tested lab's active profile starts at **13:00 UTC Monday-Friday**
+and deallocates at **01:00 UTC Tuesday-Saturday**, with a five-minute evaluator.
+These are fixed UTC times, not a daylight-saving-aware local schedule. Disabled
+or unavailable schedulers leave VMs running and billable. Merge the tag onto
+existing lab VMs without replacing their other tags; do not overwrite unrelated
+VMs' schedules. Published beta.1 assets remain unchanged and do not include this
+new tag.
+
+For future domain-controller use, scheduled deallocation makes AD/DNS unavailable
+outside work hours. Starting scanner and DC VMs together does not guarantee AD/DNS
+is ready first; sequence startup and verify service recovery when implementing AD.
+
 ## Network, recovery and teardown
 
 Both subnets have an NSG. Storage and Key Vault use private endpoints/DNS and disable public access. There is no public IP or inbound RDP/SMB rule. Outbound HTTPS is needed for approved packages and Microsoft services. The Azure Files share is provisioned but not mounted or populated by this bootstrap.

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "11169124619836277808"
+      "templateHash": "6888757701708399602"
     }
   },
   "parameters": {
@@ -169,6 +169,7 @@
     "storageAccountName": "[format('pipascode{0}', variables('suffix'))]",
     "keyVaultName": "[take(toLower(replace(format('{0}-{1}', parameters('labName'), variables('suffix')), '-', '')), 24)]",
     "tags": {
+      "start-stop": "workday",
       "workload": "purview-ip-as-code-scanner-demo",
       "data": "synthetic-only",
       "owner": "[parameters('ownerTag')]",

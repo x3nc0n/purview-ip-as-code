@@ -90,6 +90,7 @@ var suffix = uniqueString(resourceGroup().id, labName)
 var storageAccountName = 'pipascode${suffix}'
 var keyVaultName = take(toLower(replace('${labName}-${suffix}', '-', '')), 24)
 var tags = {
+  'start-stop': 'workday'
   workload: 'purview-ip-as-code-scanner-demo'
   data: 'synthetic-only'
   owner: ownerTag

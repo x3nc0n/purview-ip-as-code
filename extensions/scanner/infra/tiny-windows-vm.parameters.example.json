@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "vmName": { "value": "scanner-ad-lab-vm" },
+    "computerName": { "value": "scanner-ad-lab" },
+    "location": { "value": "westus2" },
+    "subnetId": { "value": "/subscriptions/<subscription-id>/resourceGroups/<scanner-rg>/providers/Microsoft.Network/virtualNetworks/<scanner-vnet>/subnets/scanner-vm" },
+    "privateIpAddress": { "value": "<available-private-ip>" },
+    "vmSize": { "value": "Standard_B2als_v2" },
+    "adminUsername": { "value": "<local-admin-username>" },
+    "adminPassword": {
+      "reference": {
+        "keyVault": { "id": "/subscriptions/<subscription-id>/resourceGroups/<vault-rg>/providers/Microsoft.KeyVault/vaults/<approved-vault>" },
+        "secretName": "<vm-admin-password-secret>"
+      }
+    },
+    "imageVersion": { "value": "<reviewed-windows-2022-gen2-image-version>" }
+  }
+}

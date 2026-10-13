@@ -79,3 +79,5 @@ jobs:
           }
           az bicep build --file extensions/scanner/infra/connect-existing-files.bicep --outfile $env:RUNNER_TEMP/connect-existing-files.json
           if ($LASTEXITCODE -ne 0) { throw 'Existing Azure Files connection template compilation failed.' }
+          az bicep build --file extensions/scanner/infra/tiny-windows-vm.bicep --outfile $env:RUNNER_TEMP/tiny-windows-vm.json
+          if ($LASTEXITCODE -ne 0) { throw 'Tiny Windows VM template compilation failed.' }
