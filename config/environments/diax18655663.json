@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "environment": "diax18655663",
+  "tenant": {
+    "id": "d12fb61e-6f2f-4809-9e8d-f9581ceb4fee",
+    "labelScheme": "modern"
+  },
+  "ownership": {
+    "managedLabelKeys": [
+      "public",
+      "non-business",
+      "general",
+      "confidential",
+      "confidential-any-user",
+      "confidential-internal",
+      "confidential-recipients",
+      "highly-confidential",
+      "highly-confidential-any-user",
+      "highly-confidential-internal",
+      "highly-confidential-recipients",
+      "highly-confidential-bes"
+    ],
+    "managedPolicyKeys": [
+      "demo-publishing",
+      "bcsi-spo-high",
+      "bcsi-od-high",
+      "bcsi-exchange-high",
+      "pii-spo-low",
+      "pii-spo-high",
+      "pii-od-low",
+      "pii-od-high",
+      "pii-exchange-low",
+      "pii-exchange-high"
+    ]
+  },
+  "groups": [
+    {
+      "key": "bes-authorized",
+      "id": "75b06815-24e2-445d-a7cd-5db230119716",
+      "email": "purview-bes-authorized@diax18655663.onmicrosoft.com",
+      "purpose": "bes-authorized"
+    },
+    {
+      "key": "internal-only-audience",
+      "id": "439bf370-7055-471d-9f41-ec091d9d70ac",
+      "email": "purview-internal-audience@diax18655663.onmicrosoft.com",
+      "purpose": "internal-only-audience"
+    }
+  ],
+  "audience": {
+    "key": "diax-pilot",
+    "id": "439bf370-7055-471d-9f41-ec091d9d70ac"
+  },
+  "scopes": {
+    "sharePointLocations": [
+      "https://diax18655663.sharepoint.com"
+    ],
+    "oneDriveLocations": [
+      "https://diax18655663-my.sharepoint.com/personal/admin_diax18655663_onmicrosoft_com"
+    ],
+    "exchangeLocations": [
+      "All"
+    ]
+  },
+  "features": {
+    "encryptBes": true,
+    "publishingPolicy": true,
+    "activationRequiresApproval": true
+  }
+}

@@ -219,7 +219,7 @@ Describe 'Mocked service reconciliation contracts' {
                 [bool]$IsLabelGroup, [string]$ParentId, [bool]$EncryptionEnabled,
                 [string]$EncryptionProtectionType, [string[]]$EncryptionRightsDefinitions,
                 [Nullable[int]]$EncryptionOfflineAccessDays, [string]$EncryptionContentExpiredOnDateInDaysOrNever,
-                [bool]$EncryptionPromptUser, [bool]$EncryptionDoNotForward
+                [bool]$EncryptionPromptUser, [bool]$EncryptionDoNotForward, [bool]$EncryptionEncryptOnly
             )
             $item = [pscustomobject]@{
                 Guid = [guid]::NewGuid().ToString()
@@ -230,6 +230,7 @@ Describe 'Mocked service reconciliation contracts' {
                 EncryptionOfflineAccessDays = $EncryptionOfflineAccessDays
                 EncryptionContentExpiredOnDateInDaysOrNever = $EncryptionContentExpiredOnDateInDaysOrNever
                 EncryptionPromptUser = $EncryptionPromptUser; EncryptionDoNotForward = $EncryptionDoNotForward
+                EncryptionEncryptOnly = $EncryptionEncryptOnly
             }
             [void]$global:PurviewFakeState.Labels.Add($item)
             [void]$global:PurviewFakeState.Calls.Add([pscustomobject]@{ Command = 'New-Label'; Name = $Name })
@@ -242,10 +243,10 @@ Describe 'Mocked service reconciliation contracts' {
                 [string]$ParentId, [int]$Priority, [bool]$EncryptionEnabled, [string]$EncryptionProtectionType,
                 [string[]]$EncryptionRightsDefinitions, [Nullable[int]]$EncryptionOfflineAccessDays,
                 [string]$EncryptionContentExpiredOnDateInDaysOrNever, [bool]$EncryptionPromptUser,
-                [bool]$EncryptionDoNotForward
+                [bool]$EncryptionDoNotForward, [bool]$EncryptionEncryptOnly
             )
             $item = $global:PurviewFakeState.Labels | Where-Object { [string]$_.Guid -eq $Identity } | Select-Object -First 1
-            foreach ($name in @('DisplayName', 'Tooltip', 'ContentType', 'ParentId', 'Priority', 'EncryptionEnabled', 'EncryptionProtectionType', 'EncryptionRightsDefinitions', 'EncryptionOfflineAccessDays', 'EncryptionContentExpiredOnDateInDaysOrNever', 'EncryptionPromptUser', 'EncryptionDoNotForward')) {
+            foreach ($name in @('DisplayName', 'Tooltip', 'ContentType', 'ParentId', 'Priority', 'EncryptionEnabled', 'EncryptionProtectionType', 'EncryptionRightsDefinitions', 'EncryptionOfflineAccessDays', 'EncryptionContentExpiredOnDateInDaysOrNever', 'EncryptionPromptUser', 'EncryptionDoNotForward', 'EncryptionEncryptOnly')) {
                 if ($PSBoundParameters.ContainsKey($name)) { $item.$name = $PSBoundParameters[$name] }
             }
             [void]$global:PurviewFakeState.Calls.Add([pscustomobject]@{ Command = 'Set-Label'; Identity = $Identity })

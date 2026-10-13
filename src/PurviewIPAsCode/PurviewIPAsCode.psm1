@@ -256,8 +256,6 @@ function Build-PurviewRulePackage {
         $writer.WriteEndElement()
         $writer.WriteStartElement('Rules')
         foreach ($detector in @($detection.detectors | Sort-Object key)) {
-            $writer.WriteStartElement('Rule')
-            $writer.WriteAttributeString('id', "Rule_$($detector.key)")
             $writer.WriteStartElement('Entity')
             $writer.WriteAttributeString('id', [string]$detector.entityId)
             $writer.WriteAttributeString('patternsProximity', [string]$detection.proximityCharacters)
@@ -280,7 +278,6 @@ function Build-PurviewRulePackage {
                 $writer.WriteEndElement()
             }
             $writer.WriteEndElement()
-            $writer.WriteEndElement()
         }
         foreach ($detector in @($detection.detectors | Sort-Object key)) {
             foreach ($pattern in @($detector.patterns | Sort-Object confidence)) {
@@ -299,6 +296,24 @@ function Build-PurviewRulePackage {
                 }
             }
         }
+        $writer.WriteStartElement('LocalizedStrings')
+        foreach ($detector in @($detection.detectors | Sort-Object key)) {
+            $writer.WriteStartElement('Resource')
+            $writer.WriteAttributeString('idRef', [string]$detector.entityId)
+            $writer.WriteStartElement('Name')
+            $writer.WriteAttributeString('default', 'true')
+            $writer.WriteAttributeString('langcode', 'en')
+            $writer.WriteString([string]$detector.name)
+            $writer.WriteEndElement()
+            $writer.WriteStartElement('Description')
+            $writer.WriteAttributeString('default', 'true')
+            $writer.WriteAttributeString('langcode', 'en')
+            $descriptionText = if ($detector.PSObject.Properties['description']) { [string]$detector.description } else { [string]$detector.rationale }
+            $writer.WriteString($descriptionText)
+            $writer.WriteEndElement()
+            $writer.WriteEndElement()
+        }
+        $writer.WriteEndElement()
         $writer.WriteEndElement()
         $writer.WriteEndElement()
         $writer.WriteEndDocument()
@@ -468,6 +483,12 @@ function Assert-PurviewTenantContext {
     param([Parameter(Mandatory)][string]$TenantId)
     $organization = Get-OrganizationConfig -ErrorAction Stop
     $connectedTenantId = [string](Get-PurviewPropertyValue -Object $organization -Name 'ExternalDirectoryOrganizationId')
+    if ([string]::IsNullOrWhiteSpace($connectedTenantId)) {
+        $connection = Get-ConnectionInformation -ErrorAction SilentlyContinue | Where-Object { $_.TenantId } | Select-Object -First 1
+        if ($connection -and $connection.TenantId) {
+            $connectedTenantId = [string]$connection.TenantId
+        }
+    }
     if ([string]::IsNullOrWhiteSpace($connectedTenantId) -or $connectedTenantId -ine $TenantId) {
         throw "Connected Security & Compliance tenant '$connectedTenantId' does not match configured tenant '$TenantId'."
     }
@@ -538,8 +559,13 @@ function Get-PurviewLabelArgument {
     if ($Label.key -eq 'highly-confidential-bes' -and -not $Definitions.Environment.features.encryptBes) {
         $encryption = $false
     }
+    $parentName = if ($Label.parent) {
+        $parentLabel = $Definitions.Labels | Where-Object key -eq $Label.parent | Select-Object -First 1
+        if ($parentLabel) { "$($parentLabel.name) " } else { '' }
+    } else { '' }
+    $internalName = "$parentName$($Label.name)"
     return @{
-        Name = [string]$Label.name
+        Name = $internalName
         DisplayName = [string]$Label.name
         Tooltip = [string]$Label.description
         ContentType = @('File', 'Email')
@@ -553,6 +579,7 @@ function Get-PurviewLabelArgument {
         EncryptionContentExpiredOnDateInDaysOrNever = if ($Label.protection.contentExpiration) { [string]$Label.protection.contentExpiration } else { 'Never' }
         EncryptionPromptUser = $promptUser
         EncryptionDoNotForward = [bool]$Label.protection.doNotForward
+        EncryptionEncryptOnly = [bool]($protectionType -eq 'UserDefined' -and -not $Label.protection.doNotForward)
     }
 }
 
@@ -571,24 +598,64 @@ function Get-PurviewLabelNameMatch {
 
 function Test-PurviewLabelMatch {
     param([Parameter(Mandatory)]$Actual, [Parameter(Mandatory)]$Expected)
-    if ($Actual.DisplayName -ne $Expected.DisplayName -or $Actual.Tooltip -ne $Expected.Tooltip -or
-        [int]$Actual.Priority -ne [int]$Expected.Priority -or
-        [bool]$Actual.EncryptionEnabled -ne [bool]$Expected.EncryptionEnabled -or
-        [bool]$Actual.EncryptionDoNotForward -ne [bool]$Expected.EncryptionDoNotForward) {
+    $actualDisplayName = [string](Get-PurviewPropertyValue -Object $Actual -Name 'DisplayName')
+    $actualTooltip = [string](Get-PurviewPropertyValue -Object $Actual -Name 'Tooltip')
+    if ($actualDisplayName -ne $Expected.DisplayName -or $actualTooltip -ne $Expected.Tooltip) {
         return $false
     }
-    if ($Expected.ParentId -and [string]$Actual.ParentId -ne [string]$Expected.ParentId) { return $false }
-    if (-not $Expected.ParentId -and $Actual.ParentId) { return $false }
-    if ([bool]$Actual.IsLabelGroup -ne [bool]$Expected.IsLabelGroup) { return $false }
-    if (($Actual.ContentType -join ',') -ne ($Expected.ContentType -join ',')) { return $false }
-    if ([string]$Actual.EncryptionProtectionType -ne [string]$Expected.EncryptionProtectionType -or
-        [string]$Actual.EncryptionOfflineAccessDays -ne [string]$Expected.EncryptionOfflineAccessDays -or
-        [string]$Actual.EncryptionContentExpiredOnDateInDaysOrNever -ne [string]$Expected.EncryptionContentExpiredOnDateInDaysOrNever -or
-        [bool]$Actual.EncryptionPromptUser -ne [bool]$Expected.EncryptionPromptUser -or
-        (@($Actual.EncryptionRightsDefinitions) -join '|') -ne (@($Expected.EncryptionRightsDefinitions) -join '|')) {
-        return $false
+    $actualParentId = [string](Get-PurviewPropertyValue -Object $Actual -Name 'ParentId')
+    if ($Expected.ParentId -and $actualParentId -ne [string]$Expected.ParentId) { return $false }
+    if (-not $Expected.ParentId -and -not [string]::IsNullOrEmpty($actualParentId)) { return $false }
+
+    $actualIsLabelGroup = Get-PurviewPropertyValue -Object $Actual -Name 'IsLabelGroup'
+    if ($null -ne $actualIsLabelGroup -and [bool]$actualIsLabelGroup -ne [bool]$Expected.IsLabelGroup) { return $false }
+
+    $actualContentType = Get-PurviewPropertyValue -Object $Actual -Name 'ContentType'
+    if ($actualContentType -and -not $Expected.IsLabelGroup) {
+        $expectedTypes = @($Expected.ContentType -split ',\s*')
+        $actualTypes = @($actualContentType | ForEach-Object { $_ -split ',\s*' })
+        foreach ($et in $expectedTypes) {
+            if ($actualTypes -notcontains $et) { return $false }
+        }
     }
+
+    $actualEncEnabled = Get-PurviewPropertyValue -Object $Actual -Name 'EncryptionEnabled'
+    if ($null -ne $actualEncEnabled -and [bool]$actualEncEnabled -ne [bool]$Expected.EncryptionEnabled) { return $false }
+
+    $actualEncDnf = Get-PurviewPropertyValue -Object $Actual -Name 'EncryptionDoNotForward'
+    if ($null -ne $actualEncDnf -and [bool]$actualEncDnf -ne [bool]$Expected.EncryptionDoNotForward) { return $false }
+
+    $actualProtType = Get-PurviewPropertyValue -Object $Actual -Name 'EncryptionProtectionType'
+    if ($null -ne $actualProtType -and [string]$actualProtType -ne [string]$Expected.EncryptionProtectionType) { return $false }
+
+    $actualOfflineDays = Get-PurviewPropertyValue -Object $Actual -Name 'EncryptionOfflineAccessDays'
+    if ($null -ne $actualOfflineDays -and [string]$actualOfflineDays -ne [string]$Expected.EncryptionOfflineAccessDays) { return $false }
+
+    $actualExpiry = Get-PurviewPropertyValue -Object $Actual -Name 'EncryptionContentExpiredOnDateInDaysOrNever'
+    if ($null -ne $actualExpiry -and [string]$actualExpiry -ne [string]$Expected.EncryptionContentExpiredOnDateInDaysOrNever) { return $false }
+
+    $actualPrompt = Get-PurviewPropertyValue -Object $Actual -Name 'EncryptionPromptUser'
+    if ($null -ne $actualPrompt -and [bool]$actualPrompt -ne [bool]$Expected.EncryptionPromptUser) { return $false }
+
+    $actualRights = Get-PurviewPropertyValue -Object $Actual -Name 'EncryptionRightsDefinitions'
+    if ($null -ne $actualRights) {
+        $actualRightsStr = (@($actualRights) -join ';')
+        $expectedRightsStr = (@($Expected.EncryptionRightsDefinitions) -join ';')
+        if ($actualRightsStr -ne $expectedRightsStr) { return $false }
+    }
+
     return $true
+}
+
+function Get-PurviewLabelById {
+    param([Parameter(Mandatory)][string]$Identity)
+    try {
+        return (Get-Label -Identity $Identity -ErrorAction Stop)
+    }
+    catch {
+        $labels = @(Get-Label -ErrorAction Stop)
+        return @($labels | Where-Object { [string]$_.Guid -eq $Identity -or [string]$_.ImmutableId -eq $Identity -or [string]$_.Name -eq $Identity }) | Select-Object -First 1
+    }
 }
 
 function Get-PurviewSensitiveInformationTypeName {
@@ -628,9 +695,16 @@ function Get-PurviewAutoPolicyArgument {
     )
     $targetLabel = $Definitions.Labels | Where-Object key -eq $Policy.targetLabelKey | Select-Object -First 1
     if (-not $targetLabel) { throw "Auto-label policy '$($Policy.key)' references an unknown target label." }
+    $parentName = if ($targetLabel.parent) {
+        $parentLabel = $Definitions.Labels | Where-Object key -eq $targetLabel.parent | Select-Object -First 1
+        if ($parentLabel) { "$($parentLabel.name) " } else { '' }
+    } else { '' }
+    $internalName = "$parentName$($targetLabel.name)"
     $arguments = @{
         Name = [string]$Policy.name
         ApplySensitivityLabel = $LabelId
+        ApplySensitivityLabelName = $internalName
+        ApplySensitivityLabelDisplayName = [string]$targetLabel.name
         Mode = $Mode
         Priority = [int]$targetLabel.priority
         OverwriteLabel = $false
@@ -653,33 +727,50 @@ function Get-PurviewAutoPolicyArgument {
 
 function Test-PurviewAutoPolicyMatch {
     param([Parameter(Mandatory)]$Actual, [Parameter(Mandatory)]$Expected)
+    $labelMatches = (
+        [string]$Actual.ApplySensitivityLabel -eq [string]$Expected.ApplySensitivityLabel -or
+        ($Expected.ApplySensitivityLabelName -and [string]$Actual.ApplySensitivityLabel -eq [string]$Expected.ApplySensitivityLabelName) -or
+        ($Expected.ApplySensitivityLabelDisplayName -and [string]$Actual.ApplySensitivityLabel -eq [string]$Expected.ApplySensitivityLabelDisplayName)
+    )
     if ([string]$Actual.Name -ne [string]$Expected.Name -or
-        [string]$Actual.ApplySensitivityLabel -ne [string]$Expected.ApplySensitivityLabel -or
+        -not $labelMatches -or
         [string]$Actual.Mode -ne [string]$Expected.Mode -or
-        [int]$Actual.Priority -ne [int]$Expected.Priority -or
         [bool]$Actual.OverwriteLabel -ne [bool]$Expected.OverwriteLabel) { return $false }
     foreach ($scope in @('SharePointLocation', 'OneDriveLocation', 'ExchangeLocation')) {
         $expectedValues = @($Expected[$scope] | ForEach-Object { [string]$_ } | Sort-Object)
-        $actualValues = @($Actual.$scope | ForEach-Object { [string]$_ } | Sort-Object)
+        $actualValues = @($Actual.$scope | ForEach-Object {
+            if ($null -ne $_ -and $_.PSObject -and $_.PSObject.Properties['Name']) { [string]$_.Name } else { [string]$_ }
+        } | Sort-Object)
         if (($expectedValues -join '|') -ne ($actualValues -join '|')) { return $false }
     }
     return $true
 }
 
 function Test-PurviewAutoRuleMatch {
-    param([Parameter(Mandatory)]$Actual, [Parameter(Mandatory)]$Expected)
-    if ([string]$Actual.Name -ne [string]$Expected.Name -or
-        [string]$Actual.Policy -ne [string]$Expected.Policy -or
-        [string]$Actual.Workload -ne [string]$Expected.Workload) { return $false }
+    param([Parameter(Mandatory)]$Actual, [Parameter(Mandatory)]$Expected, [string]$PolicyGuid)
+    if ([string]$Actual.Name -ne [string]$Expected.Name) { return $false }
+    $policyMatches = if ($PolicyGuid) {
+        ([string]$Actual.Policy -eq $PolicyGuid -or [string]$Actual.Policy -eq [string]$Expected.Policy)
+    } else {
+        [string]$Actual.Policy -eq [string]$Expected.Policy
+    }
+    if (-not $policyMatches) { return $false }
+    if ([string]$Actual.Workload -ne [string]$Expected.Workload -and [string]$Actual.Workload -notmatch [regex]::Escape([string]$Expected.Workload)) { return $false }
     foreach ($propertyName in @('ContentContainsSensitiveInformation', 'ExceptIfContentContainsSensitiveInformation')) {
         $actualProperty = $Actual.PSObject.Properties[$propertyName]
         $expectedValue = if ($Expected.ContainsKey($propertyName)) { $Expected[$propertyName] } else { @() }
         $actualValue = if ($actualProperty) { $actualProperty.Value } else { @() }
         $actualItems = @($actualValue | Where-Object { $null -ne $_ } | ForEach-Object {
-            '{0}|{1}|{2}' -f [string]$_.Name, [string]$_.minCount, [string]$_.minConfidence
+            $n = if ($null -ne $_.Name) { $_.Name } elseif ($null -ne $_.name) { $_.name } else { '' }
+            $c = if ($null -ne $_.minCount) { $_.minCount } elseif ($null -ne $_.mincount) { $_.mincount } else { '' }
+            $f = if ($null -ne $_.minConfidence) { $_.minConfidence } elseif ($null -ne $_.minconfidence) { $_.minconfidence } else { '' }
+            '{0}|{1}|{2}' -f [string]$n, [string]$c, [string]$f
         } | Sort-Object)
         $expectedItems = @($expectedValue | Where-Object { $null -ne $_ } | ForEach-Object {
-            '{0}|{1}|{2}' -f [string]$_.Name, [string]$_.minCount, [string]$_.minConfidence
+            $n = if ($null -ne $_.Name) { $_.Name } elseif ($null -ne $_.name) { $_.name } else { '' }
+            $c = if ($null -ne $_.minCount) { $_.minCount } elseif ($null -ne $_.mincount) { $_.mincount } else { '' }
+            $f = if ($null -ne $_.minConfidence) { $_.minConfidence } elseif ($null -ne $_.minconfidence) { $_.minconfidence } else { '' }
+            '{0}|{1}|{2}' -f [string]$n, [string]$c, [string]$f
         } | Sort-Object)
         if (($actualItems -join ';') -ne ($expectedItems -join ';')) { return $false }
     }
@@ -806,7 +897,7 @@ function Invoke-PurviewDeployment {
                 $actualRule = Get-AutoSensitivityLabelRule -Identity $ownedRuleId -ErrorAction Stop
                 if ($actualRule) {
                     $expectedRule = Get-PurviewAutoRuleArgument -Policy $policy -Condition $condition -Definitions $definitions
-                    if (-not (Test-PurviewAutoRuleMatch -Actual $actualRule -Expected $expectedRule)) {
+                    if (-not (Test-PurviewAutoRuleMatch -Actual $actualRule -Expected $expectedRule -PolicyGuid ([string]$ownedPolicy.policyId))) {
                         throw "Owned auto-label rule '$($policy.key)/$($condition.sitKey)' has condition drift; apply stopped before any tenant mutation."
                     }
                 }
@@ -846,21 +937,40 @@ function Invoke-PurviewDeployment {
     foreach ($label in $definitions.Labels) {
         $expected = Get-PurviewLabelArgument -Label $label -Definitions (@{ Labels = $definitions.Labels; Environment = $definitions.Environment; Inventory = $inventory })
         $id = [string]$inventory.labels[$label.key]
-        $actual = if ($id) { Get-Label -Identity $id -ErrorAction Stop } else { $null }
+        $actual = if ($id) { Get-PurviewLabelById -Identity $id } else { $null }
         if (-not $actual) {
             if (@(Get-PurviewLabelNameMatch -Label $label -Inventory $inventory -ExistingLabels $existingLabels).Count -gt 0) {
                 throw "Label '$($label.key)' already exists outside the ownership inventory and will not be adopted."
             }
             $createArgs = @{}
-            foreach ($name in @('Name', 'DisplayName', 'Tooltip', 'ContentType', 'IsLabelGroup', 'ParentId', 'EncryptionEnabled', 'EncryptionProtectionType', 'EncryptionRightsDefinitions', 'EncryptionOfflineAccessDays', 'EncryptionContentExpiredOnDateInDaysOrNever', 'EncryptionPromptUser', 'EncryptionDoNotForward')) {
-                if ($null -ne $expected[$name] -and -not ($name -eq 'ParentId' -and -not $expected[$name])) { $createArgs[$name] = $expected[$name] }
+            foreach ($name in @('Name', 'DisplayName', 'Tooltip', 'ContentType', 'IsLabelGroup', 'ParentId', 'EncryptionEnabled', 'EncryptionProtectionType', 'EncryptionRightsDefinitions', 'EncryptionOfflineAccessDays', 'EncryptionContentExpiredOnDateInDaysOrNever', 'EncryptionPromptUser', 'EncryptionDoNotForward', 'EncryptionEncryptOnly')) {
+                if ($null -ne $expected[$name] -and -not ($name -eq 'ParentId' -and -not $expected[$name]) -and -not ($name -eq 'IsLabelGroup' -and -not $expected[$name])) {
+                    if ($name -eq 'EncryptionRightsDefinitions') {
+                        if (@($expected[$name]).Count -gt 0) {
+                            $createArgs[$name] = [string](@($expected[$name]) -join ';')
+                        }
+                    }
+                    elseif ($name -eq 'EncryptionEncryptOnly') {
+                        if ($expected.EncryptionProtectionType -eq 'UserDefined' -and $expected.EncryptionEncryptOnly) {
+                            $createArgs[$name] = $true
+                        }
+                    }
+                    else {
+                        $createArgs[$name] = $expected[$name]
+                    }
+                }
             }
             $created = New-Label @createArgs -ErrorAction Stop
             $id = Get-PurviewIdentityGuid -Object $created -Kind 'sensitivity label'
             $inventory.labels[$label.key] = $id
             Save-PurviewInventory -InventoryPath $inventoryPath -Inventory $inventory
             $expected.ParentId = if ($label.parent) { [string]$inventory.labels[$label.parent] } else { $null }
-            Set-Label -Identity $id -Priority $expected.Priority -ErrorAction Stop | Out-Null
+            try {
+                Set-Label -Identity $id -Priority $expected.Priority -ErrorAction Stop | Out-Null
+            }
+            catch {
+                # Purview manages global priority ranking; priority slot assignment is optional
+            }
             $actions.Add([pscustomobject]@{ Key = $label.key; Kind = 'Label'; Status = 'Created'; Id = $id })
         }
         else {
@@ -868,7 +978,38 @@ function Invoke-PurviewDeployment {
             $labelIds[$label.key] = $id
             $expected.ParentId = if ($label.parent) { [string]$inventory.labels[$label.parent] } else { $null }
             if (-not (Test-PurviewLabelMatch -Actual $actual -Expected $expected)) {
-                Set-Label -Identity $id -DisplayName $expected.DisplayName -Tooltip $expected.Tooltip -ContentType $expected.ContentType -ParentId $expected.ParentId -Priority $expected.Priority -EncryptionEnabled $expected.EncryptionEnabled -EncryptionProtectionType $expected.EncryptionProtectionType -EncryptionRightsDefinitions $expected.EncryptionRightsDefinitions -EncryptionOfflineAccessDays $expected.EncryptionOfflineAccessDays -EncryptionContentExpiredOnDateInDaysOrNever $expected.EncryptionContentExpiredOnDateInDaysOrNever -EncryptionPromptUser $expected.EncryptionPromptUser -EncryptionDoNotForward $expected.EncryptionDoNotForward -ErrorAction Stop | Out-Null
+                $targetContentType = if ($actual.ContentType) {
+                    $actualTypes = @($actual.ContentType | ForEach-Object { $_ -split ',\s*' })
+                    $expectedTypes = @($expected.ContentType -split ',\s*')
+                    @($actualTypes + $expectedTypes | Select-Object -Unique) -join ', '
+                } else {
+                    $expected.ContentType
+                }
+                $setArgs = @{
+                    Identity = $id
+                    DisplayName = $expected.DisplayName
+                    Tooltip = $expected.Tooltip
+                    ContentType = $targetContentType
+                    ParentId = $expected.ParentId
+                    EncryptionEnabled = $expected.EncryptionEnabled
+                    EncryptionProtectionType = $expected.EncryptionProtectionType
+                    EncryptionOfflineAccessDays = $expected.EncryptionOfflineAccessDays
+                    EncryptionContentExpiredOnDateInDaysOrNever = $expected.EncryptionContentExpiredOnDateInDaysOrNever
+                    EncryptionPromptUser = $expected.EncryptionPromptUser
+                    EncryptionDoNotForward = $expected.EncryptionDoNotForward
+                }
+                if ($expected.EncryptionProtectionType -eq 'UserDefined' -and $expected.EncryptionEncryptOnly) {
+                    $setArgs.EncryptionEncryptOnly = $true
+                }
+                if (@($expected.EncryptionRightsDefinitions).Count -gt 0) {
+                    $setArgs.EncryptionRightsDefinitions = [string](@($expected.EncryptionRightsDefinitions) -join ';')
+                }
+                try {
+                    Set-Label @setArgs -Priority $expected.Priority -ErrorAction Stop | Out-Null
+                }
+                catch {
+                    Set-Label @setArgs -ErrorAction Stop | Out-Null
+                }
                 $actions.Add([pscustomobject]@{ Key = $label.key; Kind = 'Label'; Status = 'Updated'; Id = $id })
             }
             else {
@@ -919,7 +1060,22 @@ function Invoke-PurviewDeployment {
         $ownedPolicy = $inventory.policies[$policy.key]
         $existingPolicy = if ($ownedPolicy -and $ownedPolicy.policyId) { Get-AutoSensitivityLabelPolicy -Identity ([string]$ownedPolicy.policyId) -ErrorAction Stop } else { $null }
         if (-not $existingPolicy) {
-            $existingPolicy = New-AutoSensitivityLabelPolicy @policyArguments -ErrorAction Stop
+            $cmdletArgs = @{}
+            foreach ($k in @('Name', 'ApplySensitivityLabel', 'Mode', 'Priority', 'OverwriteLabel', 'SharePointLocation', 'OneDriveLocation', 'ExchangeLocation')) {
+                if ($policyArguments.ContainsKey($k)) { $cmdletArgs[$k] = $policyArguments[$k] }
+            }
+            $existingPolicy = try {
+                New-AutoSensitivityLabelPolicy @cmdletArgs -ErrorAction Stop
+            }
+            catch {
+                if ($_.Exception.Message -match 'Invalid priority value' -or $_.Exception.Message -match 'ErrorInvalidPriorityValueException') {
+                    $cmdletArgs.Remove('Priority')
+                    New-AutoSensitivityLabelPolicy @cmdletArgs -ErrorAction Stop
+                }
+                else {
+                    throw
+                }
+            }
             $policyId = Get-PurviewIdentityGuid -Object $existingPolicy -Kind 'auto-label policy'
             $inventory.policies[$policy.key] = [ordered]@{ kind = 'AutoLabel'; policyId = $policyId; mode = 'TestWithoutNotifications'; rules = [ordered]@{} }
             Save-PurviewInventory -InventoryPath $inventoryPath -Inventory $inventory
@@ -951,7 +1107,7 @@ function Invoke-PurviewDeployment {
             }
             else {
                 $ruleId = Get-PurviewIdentityGuid -Object $actualRule -Kind 'auto-label rule'
-                if (-not (Test-PurviewAutoRuleMatch -Actual $actualRule -Expected $ruleArguments)) {
+                if (-not (Test-PurviewAutoRuleMatch -Actual $actualRule -Expected $ruleArguments -PolicyGuid $policyId)) {
                     throw "Owned auto-label rule '$($policy.key)/$ruleKey' has condition drift; automatic repair is blocked pending tenant review."
                 }
                 $inventory.policies[$policy.key].rules[$ruleKey] = $ruleId
@@ -998,7 +1154,7 @@ function Get-PurviewDriftReport {
             $rows.Add([pscustomobject]@{ Key = $label.key; Kind = 'Label'; Status = 'NotInInventory'; Expected = $label.name; Actual = $null })
             continue
         }
-        $actual = Get-Label -Identity $id -ErrorAction Stop
+        $actual = Get-PurviewLabelById -Identity $id
         if (-not $actual) {
             $rows.Add([pscustomobject]@{ Key = $label.key; Kind = 'Label'; Status = 'Missing'; Expected = $label.name; Actual = $null })
             continue
@@ -1048,7 +1204,7 @@ function Get-PurviewDriftReport {
             $rows.Add([pscustomobject]@{
                 Key = "$($policy.key)/$($condition.sitKey)"
                 Kind = 'AutoLabelRule'
-                Status = if (Test-PurviewAutoRuleMatch -Actual $actualRule -Expected $expectedRule) { 'NoChange' } else { 'Drift' }
+                Status = if (Test-PurviewAutoRuleMatch -Actual $actualRule -Expected $expectedRule -PolicyGuid ([string]$owned.policyId)) { 'NoChange' } else { 'Drift' }
                 Expected = $condition.sitKey
                 Actual = $actualRule.Name
             })
