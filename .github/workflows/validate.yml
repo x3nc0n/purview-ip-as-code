@@ -49,6 +49,8 @@ jobs:
       - name: Validate PowerShell, SIT XML, and synthetic fixtures
         shell: pwsh
         run: |
+          az bicep install --version v0.46.1
+          if ($LASTEXITCODE -ne 0) { throw 'Bicep installation failed.' }
           ./scripts/Test-Configuration.ps1
           ./scripts/Build-RulePackage.ps1
           ./scripts/Invoke-DetectionTests.ps1
@@ -64,11 +66,6 @@ jobs:
           if ($diagnostics) {
             $diagnostics | Format-Table -AutoSize | Out-String | Write-Error
           }
-
-      - name: Install pinned Bicep compiler
-        run: |
-          az bicep install --version v0.46.1
-          if ($LASTEXITCODE -ne 0) { throw 'Bicep installation failed.' }
 
       - name: Compile and verify committed ARM JSON
         shell: pwsh
