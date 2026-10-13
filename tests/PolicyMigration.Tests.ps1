@@ -11,7 +11,7 @@ BeforeAll {
     function global:Get-AutoSensitivityLabelPolicy {
         [CmdletBinding()]
         param([string]$Identity)
-        $global:MigrationState.Policies | Where-Object { $_.Guid -eq $Identity }
+        $global:MigrationState.Policies | Where-Object { -not $Identity -or $_.Guid -eq $Identity }
     }
     function global:Get-AutoSensitivityLabelRule {
         [CmdletBinding()]
@@ -56,6 +56,7 @@ Describe 'Explicit policy retirement safety' {
         $global:MigrationState.Rules += [pscustomobject]@{ Guid = $ruleId; Policy = $legacyId }
         $inventory | ConvertTo-Json -Depth 10 | Set-Content $inventoryPath
         Mock Get-PurviewDriftReport { [pscustomobject]@{ Results = $global:MigrationState.Rows } }
+        Mock Start-Sleep {}
     }
 
     It 'plans by default without creating backups or deleting policies' {
@@ -130,6 +131,23 @@ Describe 'Explicit policy retirement safety' {
         & $scriptPath -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -BackupPath $backupPath -Apply -Confirm:$false
         $global:MigrationState.Removed | Should -HaveCount 0
         Test-Path $backupPath | Should -BeFalse
+    }
+
+    It 'safely reconciles an already deleted legacy policy with no remaining rules' {
+        $global:MigrationState.Policies = @($global:MigrationState.Policies | Where-Object Guid -ne $legacyId)
+        $global:MigrationState.Rules = @()
+        $result = & $scriptPath -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -BackupPath $backupPath -Apply -Confirm:$false
+        $result.Status | Should -Be 'InventoryReconciled'
+        $global:MigrationState.Removed | Should -HaveCount 0
+        (Get-Content $inventoryPath -Raw | ConvertFrom-Json -AsHashtable).policies.ContainsKey('bcsi-spo-high') | Should -BeFalse
+    }
+
+    It 'blocks reconciliation when a deleted policy still has propagating rules' {
+        $global:MigrationState.Policies = @($global:MigrationState.Policies | Where-Object Guid -ne $legacyId)
+        { & $scriptPath -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -BackupPath $backupPath -Apply -Confirm:$false } |
+            Should -Throw '*wait for deletion propagation*'
+        $global:MigrationState.Removed | Should -HaveCount 0
+        (Get-Content $inventoryPath -Raw | ConvertFrom-Json -AsHashtable).policies.ContainsKey('bcsi-spo-high') | Should -BeTrue
     }
 }
 

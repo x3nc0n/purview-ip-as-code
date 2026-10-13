@@ -47,6 +47,7 @@ $legacyNames = @(
 )
 $replacementIds = @($expectedKeys | ForEach-Object { [string]$inventory.policies[$_].policyId })
 $allRules = @(Get-AutoSensitivityLabelRule -ErrorAction Stop)
+$allPolicies = @(Get-AutoSensitivityLabelPolicy -ErrorAction Stop)
 $candidates = @(foreach ($key in $legacyKeys) {
     if (-not $inventory.policies.ContainsKey($key)) { continue }
     $owned = $inventory.policies[$key]
@@ -54,22 +55,27 @@ $candidates = @(foreach ($key in $legacyKeys) {
     $parsedId = [guid]::Empty
     if (-not [guid]::TryParse([string]$owned.policyId, [ref]$parsedId) -or $parsedId -eq [guid]::Empty -or
         [string]$owned.policyId -in $replacementIds) { throw "Legacy entry '$key' has an unsafe policy ID." }
-    $policy = Get-AutoSensitivityLabelPolicy -Identity $owned.policyId -ErrorAction Stop
-    if (-not $policy -or [string]$policy.Guid -ne [string]$owned.policyId -or
+    $policy = $allPolicies | Where-Object { [string]$_.Guid -eq [string]$owned.policyId } | Select-Object -First 1
+    $policyRules = @($allRules | Where-Object { [string]$_.Policy -eq [string]$owned.policyId })
+    if (-not $policy) {
+        if ($policyRules.Count -gt 0) { throw "Missing legacy policy '$key' still has rules; wait for deletion propagation before retrying." }
+        [pscustomobject]@{Key = $key; Id = [string]$owned.policyId; Policy = $null; AlreadyAbsent = $true}
+        continue
+    }
+    if ([string]$policy.Guid -ne [string]$owned.policyId -or
         [string]$policy.Mode -ne 'TestWithoutNotifications' -or
         [string]$policy.Name -ne $legacyNames[[array]::IndexOf($legacyKeys, $key)]) {
         throw "Legacy policy '$key' is missing, active, or outside the reviewed naming boundary."
     }
-    $policyRules = @($allRules | Where-Object { [string]$_.Policy -eq [string]$owned.policyId })
     if (-not $owned.rules -or @($policyRules | Where-Object { [string]$_.Guid -notin @($owned.rules.Values) }).Count -gt 0) {
         throw "Legacy policy '$key' contains rules outside the ownership inventory."
     }
-    [pscustomobject]@{Key = $key; Id = [string]$owned.policyId; Policy = $policy}
+    [pscustomobject]@{Key = $key; Id = [string]$owned.policyId; Policy = $policy; AlreadyAbsent = $false}
 })
 if ($candidates.Count -eq 0) { return }
 if (@($candidates.Id | Sort-Object -Unique).Count -ne @($candidates).Count) { throw 'Duplicate legacy ownership IDs; refusing retirement.' }
 if (-not $Apply) {
-    $candidates | Select-Object Key, Id, @{Name = 'Action'; Expression = {'RetireAfterReplacementValidation'}}
+    $candidates | Select-Object Key, Id, @{Name = 'Action'; Expression = { if ($_.AlreadyAbsent) { 'ReconcileAbsentLegacyInventory' } else { 'RetireAfterReplacementValidation' } }}
     return
 }
 if (Test-Path -LiteralPath $BackupPath) { throw 'Backup already exists; choose a new path rather than overwriting recovery evidence.' }
@@ -81,14 +87,20 @@ if ($PSCmdlet.ShouldProcess($inventory.tenantId, "Back up and retire $(@($candid
         CreatedAtUtc = [datetime]::UtcNow.ToString('o')
     } | Export-Clixml -LiteralPath $BackupPath
     foreach ($candidate in $candidates) {
-        Remove-AutoSensitivityLabelPolicy -Identity $candidate.Id -Confirm:$false -ErrorAction Stop
-        $remainingRules = @(Get-AutoSensitivityLabelRule -ErrorAction Stop | Where-Object { [string]$_.Policy -eq $candidate.Id })
-        if ($remainingRules.Count -gt 0) { throw "Retired policy '$($candidate.Key)' still has rules; keep its inventory and investigate using the recovery snapshot." }
+        if (-not $candidate.AlreadyAbsent) {
+            Remove-AutoSensitivityLabelPolicy -Identity $candidate.Id -Confirm:$false -ErrorAction Stop
+            for ($attempt = 0; $attempt -lt 12; $attempt++) {
+                $remainingRules = @(Get-AutoSensitivityLabelRule -ErrorAction Stop | Where-Object { [string]$_.Policy -eq $candidate.Id })
+                if ($remainingRules.Count -eq 0) { break }
+                if ($attempt -lt 11) { Start-Sleep -Seconds 10 }
+            }
+            if ($remainingRules.Count -gt 0) { throw "Retired policy '$($candidate.Key)' still has rules; keep its inventory and investigate using the recovery snapshot." }
+        }
         $inventory.policies.Remove($candidate.Key)
         & (Get-Module PurviewIPAsCode) {
             param($path, $state)
             Save-PurviewInventory -InventoryPath $path -Inventory $state
         } $InventoryPath $inventory
-        [pscustomobject]@{Key = $candidate.Key; Id = $candidate.Id; Status = 'Retired'}
+        [pscustomobject]@{Key = $candidate.Key; Id = $candidate.Id; Status = if ($candidate.AlreadyAbsent) { 'InventoryReconciled' } else { 'Retired' }}
     }
 }
