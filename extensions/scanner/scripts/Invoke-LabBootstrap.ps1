@@ -398,7 +398,7 @@ function Get-PinnedPackage {
         }
         Remove-Item -LiteralPath $destination -Force
     }
-    $download = Invoke-WebRequest -Uri $Uri -OutFile $destination -MaximumRedirection 3 -TimeoutSec 900
+    $download = Invoke-WebRequest -Uri $Uri -OutFile $destination -PassThru -UseBasicParsing -MaximumRedirection 3 -TimeoutSec 900
     $baseResponse = if ($download) { $download.BaseResponse } else { $null }
     $requestMessage = if ($baseResponse) { $baseResponse.PSObject.Properties['RequestMessage'] } else { $null }
     $responseUri = if ($baseResponse) { $baseResponse.PSObject.Properties['ResponseUri'] } else { $null }
