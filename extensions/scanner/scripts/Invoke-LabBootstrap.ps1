@@ -570,7 +570,7 @@ function Invoke-ServiceContextConfiguration {
     $status = $before
     $statusProperty = @('ClusterStatus', 'Status') | Where-Object { $_ -in $status.PSObject.Properties.Name } | Select-Object -First 1
     $startProperty = @('ScanStartTime', 'StartTime') | Where-Object { $_ -in $status.PSObject.Properties.Name } | Select-Object -First 1
-    Write-Output ("ScanStatus: " + ($status | Format-List * | Out-String))
+    Write-Host ("ScanStatus: " + ($status | Format-List * | Out-String))
     if (-not $statusProperty -or -not $startProperty) {
         throw 'Get-ScanStatus output did not contain documented cluster-status and scan-start fields.'
     }
