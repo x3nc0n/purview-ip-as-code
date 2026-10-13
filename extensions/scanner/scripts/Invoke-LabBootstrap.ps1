@@ -732,7 +732,7 @@ try {
     Update-ReadinessEntry -Name 'softwareInstalled' -Value $true
 
     $workerArguments = "-NoLogo -NoProfile -ExecutionPolicy Bypass -File `"$stateDirectory\Invoke-LabBootstrap.ps1`" -Resume -ServiceContext"
-    $workerProcess = Start-Process -FilePath "$PSHOME\powershell.exe" -Credential $serviceCredential -LoadUserProfile -ArgumentList $workerArguments -PassThru -Wait -WindowStyle Hidden
+    $workerProcess = Start-Process -FilePath "$PSHOME\powershell.exe" -Credential $serviceCredential -LoadUserProfile -ArgumentList $workerArguments -PassThru -Wait -WindowStyle Hidden -RedirectStandardOutput "$stateDirectory\worker.out.log" -RedirectStandardError "$stateDirectory\worker.err.log"
     if ($workerProcess.ExitCode -ne 0) {
         throw "Service-context credential setup, tenant connection, or synthetic content seeding failed with exit code $($workerProcess.ExitCode)."
     }
