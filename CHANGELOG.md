@@ -1,5 +1,11 @@
 # Release notes
 
+## Unreleased
+
+- Consolidates nine service-side auto-label policies into four, preserving configured locations, SSN 1-199/200+ tiers, BES precedence, and Exchange Do Not Forward. Each policy still applies one fixed label. Purview requires single-workload rules; all three configured workloads produce 15 rules within those four policies.
+- Adds multi-workload definitions and a guarded, backup-first retirement helper for inventory-owned legacy simulation policies. Normal apply remains non-destructive; activation remains separately gated.
+- The published `v1.0.0-beta.1` tag and assets remain unchanged.
+
 ## v1.0.0-beta.1
 
 First beta of the repository and scanner add-on. Not production-ready.

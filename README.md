@@ -9,7 +9,7 @@ Version-controlled Microsoft Purview sensitivity labels, a separately managed BC
 - JSON definitions and JSON Schema validation for labels, policy families, detection rules, and a placeholder tenant overlay.
 - A deterministic Unicode UTF-16 custom sensitive-information-type (SIT) XML compiler with stable, declared entity identifiers.
 - A PowerShell module and commands for offline validation, plan generation, inventory-backed label/SIT/auto-label reconciliation, guarded activation, and drift reporting.
-- Independent high-confidence BCSI policies and SSN-count PII policies. The fictional PII threshold is 200 occurrences **in one item**, not unique people or an incident total.
+- Four simulation policies: BCSI across all configured workloads, PII 1-199 across all workloads, PII 200+ for SharePoint/OneDrive, and PII 200+ for Exchange. The fictional PII threshold is 200 SSN occurrences **in one item**, not unique people or an incident total.
 - Synthetic, reproducible detection fixtures and an expected-results manifest.
 - A modular Bicep scanner lab and compiled ARM template with private Azure Files infrastructure, private DNS, managed identity, Key Vault, a Windows VM, and a report-backed discovery bootstrap. The beta scans local fixtures; it does not mount Azure Files.
 - Pull-request validation, tag-built public release assets, and a manually dispatched, environment-protected GitHub deployment workflow.
@@ -58,6 +58,8 @@ Invoke-PurviewDeployment -EnvironmentPath ./config/environments/demo.example.jso
 Apply creates or updates inventory-owned labels, imports the stable-ID custom SIT package, and creates independent auto-label policy rules in `TestWithoutNotifications` mode. Auto-label policy priority follows the target label priority, so BES wins when BCSI and PII policies overlap. Existing resources outside the inventory are never adopted, name collisions fail closed, IDs are persisted after creation, and no object is deleted. The label-publishing policy remains **blocked**: the documented `New-LabelPolicy` interface does not expose a recipient-user/group audience parameter, so the adapter will not risk publishing the labels tenant-wide. A blocked publishing policy is reported in the apply result; it is not silently approximated.
 
 Auto-label activation requires an approval record with `approved`, `approvedBy`, `simulationRunId`, and `manualLabelPreservationVerified: true`. The script re-reads every managed policy and rule, requires the reviewed simulation mode and exact configuration, and only then changes policies to `Enable`. This operator attestation is not independent evidence that the tenant preserved manual labels or classified content correctly. A plan, command-parameter probe, or local fixture run does not establish live tenant behavior. No object is deleted automatically.
+
+Each policy applies one fixed label; its rules cannot select different tier labels. Four policies preserve the PII tiers and Exchange Do Not Forward while consolidating locations. Existing nine-policy deployments require a backup-first, explicit retirement step after replacement validation; see [migration operations](docs/operations.md#consolidating-an-existing-nine-policy-deployment).
 
 ## Scanner lab
 

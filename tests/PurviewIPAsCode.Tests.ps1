@@ -44,8 +44,9 @@ Describe 'Purview configuration contracts' {
     It 'keeps BCSI and PII policies independent with the inclusive 200-occurrence boundary' {
         $policies = Get-Content (Join-Path $repositoryRoot 'config\auto-labeling-policies.json') -Raw | ConvertFrom-Json
         @($policies | Where-Object family -eq 'bcsi' | Where-Object targetLabelKey -ne 'highly-confidential-bes').Count | Should -Be 0
-        @($policies | Where-Object family -eq 'pii' | Where-Object { $_.conditions[0].maxCount -eq 199 -and $_.conditions[0].minCount -eq 1 }) | Should -HaveCount 3
-        @($policies | Where-Object family -eq 'pii' | Where-Object { $_.conditions[0].minCount -eq 200 -and $null -eq $_.conditions[0].maxCount }) | Should -HaveCount 3
+        $policies | Should -HaveCount 4
+        @($policies | Where-Object family -eq 'pii' | Where-Object { $_.conditions[0].maxCount -eq 199 -and $_.conditions[0].minCount -eq 1 }) | Should -HaveCount 1
+        @($policies | Where-Object family -eq 'pii' | Where-Object { $_.conditions[0].minCount -eq 200 -and $null -eq $_.conditions[0].maxCount }) | Should -HaveCount 2
         @($policies | Where-Object { $_.key -like 'pii-*' -and $_.conditions[0].sitKey -ne 'us-ssn' }).Count | Should -Be 0
     }
 
@@ -144,17 +145,17 @@ Describe 'Deterministic SIT XML compiler' {
         InModuleScope PurviewIPAsCode {
             $definitions = Get-PurviewDefinition 'config\environments\demo.example.json'
             $definitions.Environment.scopes.sharePointLocations = @('https://example.sharepoint.com/sites/demo')
-            $policy = $definitions.Policies | Where-Object key -eq 'pii-spo-low'
-            $arguments = Get-PurviewAutoRuleArgument -Policy $policy -Condition $policy.conditions[0] -Definitions $definitions
+            $policy = $definitions.Policies | Where-Object key -eq 'pii-low'
+            $arguments = Get-PurviewAutoRuleArgument -Policy $policy -Condition $policy.conditions[0] -Definitions $definitions -Workload SharePoint
             $arguments.ContentContainsSensitiveInformation | Should -HaveCount 1
             $arguments.ContentContainsSensitiveInformation[0].minCount | Should -Be '1'
             $arguments.ContentContainsSensitiveInformation[0].minConfidence | Should -Be '85'
             $arguments.ExceptIfContentContainsSensitiveInformation | Should -HaveCount 1
             $arguments.ExceptIfContentContainsSensitiveInformation[0].minCount | Should -Be '200'
-            $bcsiPolicy = $definitions.Policies | Where-Object key -eq 'bcsi-spo-high'
+            $bcsiPolicy = $definitions.Policies | Where-Object key -eq 'bcsi-high'
             $bcsiLabel = $definitions.Labels | Where-Object key -eq 'highly-confidential-bes'
             $bcsi = Get-PurviewAutoPolicyArgument -Policy $bcsiPolicy -Definitions $definitions -LabelId '44444444-4444-4444-8444-444444444444'
-            $piiPolicy = $definitions.Policies | Where-Object key -eq 'pii-spo-high'
+            $piiPolicy = $definitions.Policies | Where-Object key -eq 'pii-high-files'
             $piiLabel = $definitions.Labels | Where-Object key -eq 'highly-confidential-internal'
             $pii = Get-PurviewAutoPolicyArgument -Policy $piiPolicy -Definitions $definitions -LabelId '55555555-5555-4555-8555-555555555555'
             $bcsi.Priority | Should -Be $bcsiLabel.priority
@@ -166,15 +167,58 @@ Describe 'Deterministic SIT XML compiler' {
     It 'creates an independent one-SIT rule for each BCSI detector' {
         InModuleScope PurviewIPAsCode {
             $definitions = Get-PurviewDefinition 'config\environments\demo.example.json'
-            $policy = $definitions.Policies | Where-Object key -eq 'bcsi-spo-high'
+            $policy = $definitions.Policies | Where-Object key -eq 'bcsi-high'
             foreach ($condition in $policy.conditions) {
-                $arguments = Get-PurviewAutoRuleArgument -Policy $policy -Condition $condition -Definitions $definitions
+                $arguments = Get-PurviewAutoRuleArgument -Policy $policy -Condition $condition -Definitions $definitions -Workload SharePoint
                 $arguments.ContentContainsSensitiveInformation | Should -HaveCount 1
                 $arguments.ContentContainsSensitiveInformation[0].Name | Should -Be (
                     Get-PurviewSensitiveInformationTypeName -SitKey $condition.sitKey -Definitions $definitions
                 )
                 $arguments.ContainsKey('ExceptIfContentContainsSensitiveInformation') | Should -BeFalse
             }
+        }
+    }
+
+    It 'scopes policies to configured locations and expands conditions into single-workload rules' {
+        InModuleScope PurviewIPAsCode {
+            $definitions = Get-PurviewDefinition 'config\environments\demo.example.json'
+            $definitions.Environment.scopes.sharePointLocations = @('https://example.sharepoint.com/sites/demo')
+            $definitions.Environment.scopes.oneDriveLocations = @('https://example-my.sharepoint.com/personal/pilot')
+            $definitions.Environment.scopes.exchangeLocations = @('pilot@example.com')
+            $rules = @($definitions.Policies | ForEach-Object { Get-PurviewAutoRuleDefinition -Policy $_ -Definitions $definitions })
+            $rules | Should -HaveCount 15
+            $policy = $definitions.Policies | Where-Object key -eq 'bcsi-high'
+            $arguments = Get-PurviewAutoPolicyArgument -Policy $policy -Definitions $definitions -LabelId '44444444-4444-4444-8444-444444444444'
+            $arguments.SharePointLocation | Should -Be @('https://example.sharepoint.com/sites/demo')
+            $arguments.OneDriveLocation | Should -Be @('https://example-my.sharepoint.com/personal/pilot')
+            $arguments.ExchangeLocation | Should -Be @('pilot@example.com')
+            foreach ($rule in (Get-PurviewAutoRuleDefinition -Policy $policy -Definitions $definitions)) {
+                $ruleArguments = Get-PurviewAutoRuleArgument -Policy $policy -Condition $rule.Condition -Definitions $definitions -Workload $rule.Workload
+                $ruleArguments.Workload | Should -BeIn @('SharePoint', 'OneDriveForBusiness', 'Exchange')
+                $ruleArguments.Name | Should -Be "bcsi-high-$($rule.Key)"
+            }
+            { Get-PurviewAutoRuleArgument -Policy $policy -Condition $policy.conditions[0] -Definitions $definitions } |
+                Should -Throw '*one explicit workload*'
+            $definitions.Environment.scopes.oneDriveLocations = @()
+            $arguments = Get-PurviewAutoPolicyArgument -Policy $policy -Definitions $definitions -LabelId '44444444-4444-4444-8444-444444444444'
+            $arguments.ContainsKey('OneDriveLocation') | Should -BeFalse
+            @(Get-PurviewAutoRuleDefinition -Policy $policy -Definitions $definitions) | Should -HaveCount 6
+        }
+    }
+
+    It 'matches service-reported workload flags as tokens rather than substrings' {
+        InModuleScope PurviewIPAsCode {
+            $definitions = Get-PurviewDefinition 'config\environments\demo.example.json'
+            $policy = $definitions.Policies | Where-Object key -eq 'pii-exchange-high'
+            $expected = Get-PurviewAutoRuleArgument -Policy $policy -Condition $policy.conditions[0] -Definitions $definitions
+            $actual = [pscustomobject]@{
+                Name = $expected.Name; Policy = '44444444-4444-4444-8444-444444444444'
+                Workload = 'Exchange, SharePoint, OneDriveForBusiness'
+                ContentContainsSensitiveInformation = $expected.ContentContainsSensitiveInformation
+            }
+            Test-PurviewAutoRuleMatch -Actual $actual -Expected $expected -PolicyGuid $actual.Policy | Should -BeTrue
+            $actual.Workload = 'NotExchange'
+            Test-PurviewAutoRuleMatch -Actual $actual -Expected $expected -PolicyGuid $actual.Policy | Should -BeFalse
         }
     }
 
@@ -187,7 +231,10 @@ Describe 'Deterministic SIT XML compiler' {
 }
 
 Describe 'Mocked service reconciliation contracts' {
-    It 'creates owned labels, a custom SIT package, and independent simulation rules, then converges without repeat writes' {
+    It 'reconciles and activates without repeat writes (all workloads: <AllWorkloads>)' -ForEach @(
+        @{ AllWorkloads = $false; ExpectedRules = 5; ExpectedPolicies = 3; ExpectedBlocked = 1 },
+        @{ AllWorkloads = $true; ExpectedRules = 15; ExpectedPolicies = 4; ExpectedBlocked = 0 }
+    ) {
         $global:PurviewFakeState = @{
             Labels = [System.Collections.Generic.List[object]]::new()
             Packages = [System.Collections.Generic.List[object]]::new()
@@ -352,16 +399,20 @@ Describe 'Mocked service reconciliation contracts' {
             $environment.groups[1].id = $global:PurviewFakeState.Groups['internal-audience@example.com']
             $environment.groups[1].email = 'internal-audience@example.com'
             $environment.scopes.sharePointLocations = @('https://example.sharepoint.com/sites/demo')
+            if ($AllWorkloads) {
+                $environment.scopes.oneDriveLocations = @('https://example-my.sharepoint.com/personal/pilot')
+                $environment.scopes.exchangeLocations = @('pilot@example.com')
+            }
             $environmentPath = Join-Path $TestDrive 'mocked-environment.json'
             $environment | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $environmentPath -Encoding utf8
-            $inventoryPath = Join-Path $TestDrive 'mocked-inventory.json'
+            $inventoryPath = Join-Path $TestDrive "mocked-inventory-$AllWorkloads.json"
             Initialize-PurviewInventory -EnvironmentPath $environmentPath -InventoryPath $inventoryPath
 
             $first = Invoke-PurviewDeployment -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -Apply
             $first.Status | Should -Be 'PartiallyApplied'
             @($first.Actions | Where-Object { $_.Status -eq 'Created' -and $_.Kind -eq 'Label' }).Count | Should -Be 12
-            @($global:PurviewFakeState.Calls | Where-Object Command -eq 'New-AutoSensitivityLabelRule').Count | Should -Be 5
-            @($first.Actions | Where-Object { $_.Status -eq 'Blocked' }).Count | Should -Be 6
+            @($global:PurviewFakeState.Calls | Where-Object Command -eq 'New-AutoSensitivityLabelRule').Count | Should -Be $ExpectedRules
+            @($first.Actions | Where-Object { $_.Status -eq 'Blocked' }).Count | Should -Be $ExpectedBlocked
             $global:PurviewFakeState.Calls.Clear()
 
             $second = Invoke-PurviewDeployment -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -Apply
@@ -374,8 +425,8 @@ Describe 'Mocked service reconciliation contracts' {
             Set-Content -LiteralPath $approvalPath -Value '{"approved":true,"approvedBy":"reviewer","simulationRunId":"mock-run","manualLabelPreservationVerified":true}' -Encoding utf8
             $activation = Enable-PurviewAutoLabeling -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -ApprovalRecordPath $approvalPath
             $activation.Status | Should -Be 'Enabled'
-            @($activation.Policies).Count | Should -Be 3
-            @($global:PurviewFakeState.Calls | Where-Object Command -eq 'Set-AutoSensitivityLabelPolicy').Count | Should -Be 3
+            @($activation.Policies).Count | Should -Be $ExpectedPolicies
+            @($global:PurviewFakeState.Calls | Where-Object Command -eq 'Set-AutoSensitivityLabelPolicy').Count | Should -Be $ExpectedPolicies
             $global:PurviewFakeState.Calls.Clear()
 
             $afterActivation = Invoke-PurviewDeployment -EnvironmentPath $environmentPath -InventoryPath $inventoryPath -Apply

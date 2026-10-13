@@ -1,9 +1,9 @@
 [
   {
-    "key": "bcsi-spo-high",
+    "key": "bcsi-high",
     "family": "bcsi",
-    "name": "Purview IP as code - BCSI SharePoint (simulation)",
-    "workload": "SharePoint",
+    "name": "Purview IP as code - BCSI (simulation)",
+    "workload": ["SharePoint", "OneDrive", "Exchange"],
     "targetLabelKey": "highly-confidential-bes",
     "mode": "TestWithoutNotifications",
     "conditions": [
@@ -12,102 +12,39 @@
       { "sitKey": "bcsi-access-procedures", "minCount": 1, "maxCount": null, "minConfidence": 85 }
     ],
     "protectionAction": "apply-label",
-    "notes": "Independent BCSI detector matches; high-confidence only. Verify OR semantics and label priority in the target tenant."
+    "notes": "Independent high-confidence BCSI detectors across all configured workloads. Any detector match targets BES."
   },
   {
-    "key": "bcsi-od-high",
-    "family": "bcsi",
-    "name": "Purview IP as code - BCSI OneDrive (simulation)",
-    "workload": "OneDrive",
-    "targetLabelKey": "highly-confidential-bes",
-    "mode": "TestWithoutNotifications",
-    "conditions": [
-      { "sitKey": "bcsi-explicit-designation", "minCount": 1, "maxCount": null, "minConfidence": 85 },
-      { "sitKey": "bcsi-network-security", "minCount": 1, "maxCount": null, "minConfidence": 85 },
-      { "sitKey": "bcsi-access-procedures", "minCount": 1, "maxCount": null, "minConfidence": 85 }
-    ],
-    "protectionAction": "apply-label",
-    "notes": "Independent BCSI detector matches; high-confidence only. Verify OR semantics and label priority in the target tenant."
-  },
-  {
-    "key": "bcsi-exchange-high",
-    "family": "bcsi",
-    "name": "Purview IP as code - BCSI Exchange (simulation)",
-    "workload": "Exchange",
-    "targetLabelKey": "highly-confidential-bes",
-    "mode": "TestWithoutNotifications",
-    "conditions": [
-      { "sitKey": "bcsi-explicit-designation", "minCount": 1, "maxCount": null, "minConfidence": 85 },
-      { "sitKey": "bcsi-network-security", "minCount": 1, "maxCount": null, "minConfidence": 85 },
-      { "sitKey": "bcsi-access-procedures", "minCount": 1, "maxCount": null, "minConfidence": 85 }
-    ],
-    "protectionAction": "apply-label",
-    "notes": "Exchange evaluates mail in transit; this is not a retrospective mailbox scan."
-  },
-  {
-    "key": "pii-spo-low",
+    "key": "pii-low",
     "family": "pii",
-    "name": "Purview IP as code - PII SharePoint 1-199 (simulation)",
-    "workload": "SharePoint",
+    "name": "Purview IP as code - PII 1-199 (simulation)",
+    "workload": ["SharePoint", "OneDrive", "Exchange"],
     "targetLabelKey": "confidential-internal",
     "mode": "TestWithoutNotifications",
     "conditions": [{ "sitKey": "us-ssn", "minCount": 1, "maxCount": 199, "minConfidence": 85 }],
     "protectionAction": "apply-label",
-    "notes": "Occurrence count in one item, not unique people. Independent from BCSI."
+    "notes": "Per-item SSN occurrence count, not unique people. Independent from BCSI; excludes 200+ occurrences."
   },
   {
-    "key": "pii-spo-high",
+    "key": "pii-high-files",
     "family": "pii",
-    "name": "Purview IP as code - PII SharePoint 200+ (simulation)",
-    "workload": "SharePoint",
+    "name": "Purview IP as code - PII files 200+ (simulation)",
+    "workload": ["SharePoint", "OneDrive"],
     "targetLabelKey": "highly-confidential-internal",
     "mode": "TestWithoutNotifications",
     "conditions": [{ "sitKey": "us-ssn", "minCount": 200, "maxCount": null, "minConfidence": 85 }],
     "protectionAction": "apply-label",
-    "notes": "Fictional impact threshold. Independent from BCSI."
-  },
-  {
-    "key": "pii-od-low",
-    "family": "pii",
-    "name": "Purview IP as code - PII OneDrive 1-199 (simulation)",
-    "workload": "OneDrive",
-    "targetLabelKey": "confidential-internal",
-    "mode": "TestWithoutNotifications",
-    "conditions": [{ "sitKey": "us-ssn", "minCount": 1, "maxCount": 199, "minConfidence": 85 }],
-    "protectionAction": "apply-label",
-    "notes": "Occurrence count in one item, not unique people. Independent from BCSI."
-  },
-  {
-    "key": "pii-od-high",
-    "family": "pii",
-    "name": "Purview IP as code - PII OneDrive 200+ (simulation)",
-    "workload": "OneDrive",
-    "targetLabelKey": "highly-confidential-internal",
-    "mode": "TestWithoutNotifications",
-    "conditions": [{ "sitKey": "us-ssn", "minCount": 200, "maxCount": null, "minConfidence": 85 }],
-    "protectionAction": "apply-label",
-    "notes": "Fictional impact threshold. Independent from BCSI."
-  },
-  {
-    "key": "pii-exchange-low",
-    "family": "pii",
-    "name": "Purview IP as code - PII Exchange 1-199 (simulation)",
-    "workload": "Exchange",
-    "targetLabelKey": "confidential-internal",
-    "mode": "TestWithoutNotifications",
-    "conditions": [{ "sitKey": "us-ssn", "minCount": 1, "maxCount": 199, "minConfidence": 85 }],
-    "protectionAction": "apply-label",
-    "notes": "Occurrence count in one message, not unique people. Independent from BCSI."
+    "notes": "Fictional 200+ occurrence threshold for SharePoint/OneDrive files. Independent from BCSI."
   },
   {
     "key": "pii-exchange-high",
     "family": "pii",
     "name": "Purview IP as code - PII Exchange 200+ (simulation)",
-    "workload": "Exchange",
+    "workload": ["Exchange"],
     "targetLabelKey": "highly-confidential-recipients",
     "mode": "TestWithoutNotifications",
     "conditions": [{ "sitKey": "us-ssn", "minCount": 200, "maxCount": null, "minConfidence": 85 }],
     "protectionAction": "do-not-forward",
-    "notes": "Exchange-only high-volume policy; verify Do Not Forward support, including external recipients, in the target tenant."
+    "notes": "Exchange-only 200+ occurrence tier retains Recipients Only / Do Not Forward. Exchange evaluates mail in transit."
   }
 ]

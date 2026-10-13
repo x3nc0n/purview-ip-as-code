@@ -12,6 +12,22 @@ The documented `New-LabelPolicy` cmdlet does not expose a recipient-user/group a
 
 Drift reporting requires a connected, read-only-capable Security & Compliance session and an explicit tenant-scoped inventory. It only queries recorded GUIDs; it never adopts objects by display name. `Get-DriftReport.ps1` returns a PowerShell object and can write JSON to a file when `-OutputPath` is supplied.
 
+## Consolidating an existing nine-policy deployment
+
+Each auto-label policy applies one label, so tier-specific labels cannot be selected by rules inside one policy. The four-policy layout retains BCSI -> Highly Confidential / BES across configured workloads, PII 1-199 -> Confidential / Internal Only across workloads, PII 200+ files -> Highly Confidential / Internal Only, and PII 200+ Exchange -> Highly Confidential / Recipients Only with Do Not Forward. The policy locations are the existing overlay scopes, never an automatic expansion to `All`. PII is specifically the US SSN example, not a general HR classifier.
+
+Update the overlay ownership allowlist to `demo-publishing`, `bcsi-high`, `pii-low`, `pii-high-files`, and `pii-exchange-high`. Preserve the existing inventory, including legacy IDs. Back up the inventory and live definitions before applying. Normal apply creates three replacements alongside the old simulation policies and reuses Exchange-high; it never deletes the old policies.
+
+```powershell
+Invoke-PurviewDeployment -EnvironmentPath <overlay> -InventoryPath <inventory> -Apply
+Get-PurviewDriftReport -EnvironmentPath <overlay> -InventoryPath <inventory>
+.\scripts\Remove-SupersededAutoLabelPolicies.ps1 -EnvironmentPath <overlay> -InventoryPath <inventory> -BackupPath <new-private-backup.clixml>
+# After reviewing the retirement plan:
+.\scripts\Remove-SupersededAutoLabelPolicies.ps1 -EnvironmentPath <overlay> -InventoryPath <inventory> -BackupPath <new-private-backup.clixml> -Apply
+```
+
+The retirement helper requires four matching replacement policies and every expected single-workload rule in simulation, checks tenant/ownership/exact legacy names, and saves a new CLIXML recovery snapshot before removing up to eight legacy policies by GUID. All three configured workloads produce 15 rules within the four policies. It rejects unowned rules and verifies rule removal before saving each inventory change. Keep backups private; they contain tenant configuration. `-WhatIf` prevents the helper's write block; do not rely on the remote cmdlet's `-WhatIf`. Afterwards verify four policies, the expected rules, scopes/labels/conditions, and a no-write reapply. If interrupted, inspect the snapshot and remaining live objects before repairing inventory; deleted GUIDs cannot be restored by importing CLIXML and must be recreated deliberately. Do not enable policies without separate simulation approval.
+
 ## Scanner states
 
 The bootstrap writes `C:\ProgramData\PurviewIPAsCode\readiness.json`, containing separate `azureProvisioned`, `softwareInstalled`, `tenantConnected`, `demoContentSeeded`, `discoveryComplete`, `enforcementEnabled`, `scannerLabelConditionsSupported`, and `readyForEnforcement` fields. A `diagnosticCode` identifies the failed stage without copying secret values or scanned content. Readiness is never inferred from VM provisioning alone.

@@ -22,14 +22,9 @@
     ],
     "managedPolicyKeys": [
       "demo-publishing",
-      "bcsi-spo-high",
-      "bcsi-od-high",
-      "bcsi-exchange-high",
-      "pii-spo-low",
-      "pii-spo-high",
-      "pii-od-low",
-      "pii-od-high",
-      "pii-exchange-low",
+      "bcsi-high",
+      "pii-low",
+      "pii-high-files",
       "pii-exchange-high"
     ]
   },

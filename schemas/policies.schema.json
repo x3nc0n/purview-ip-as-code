@@ -10,7 +10,12 @@
       "key": { "type": "string" },
       "family": { "type": "string", "enum": ["bcsi", "pii"] },
       "name": { "type": "string" },
-      "workload": { "type": "string", "enum": ["SharePoint", "OneDrive", "Exchange", "Scanner"] },
+      "workload": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": { "type": "string", "enum": ["SharePoint", "OneDrive", "Exchange"] }
+      },
       "targetLabelKey": { "type": "string" },
       "mode": { "type": "string", "enum": ["TestWithoutNotifications", "Enforce"] },
       "conditions": {

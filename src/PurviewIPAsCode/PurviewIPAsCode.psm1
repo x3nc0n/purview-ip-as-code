@@ -158,8 +158,8 @@ function Test-PurviewConfiguration {
     }
 
     $bcsiPolicies = @($policies | Where-Object family -eq 'bcsi')
-    if ($bcsiPolicies.Count -ne 3 -or @($bcsiPolicies | Where-Object targetLabelKey -ne 'highly-confidential-bes').Count -gt 0) {
-        $errors.Add('The three independent BCSI policies must all target Highly Confidential / BES.')
+    if ($bcsiPolicies.Count -ne 1 -or @($bcsiPolicies | Where-Object targetLabelKey -ne 'highly-confidential-bes').Count -gt 0) {
+        $errors.Add('One consolidated BCSI policy must target Highly Confidential / BES.')
     }
     foreach ($policy in $policies) {
         foreach ($condition in $policy.conditions) {
@@ -181,12 +181,29 @@ function Test-PurviewConfiguration {
         }
     }
     $thresholdPolicies = @($policies | Where-Object { $_.family -eq 'pii' -and $_.conditions[0].maxCount -eq 199 })
-    if ($thresholdPolicies.Count -ne 3 -or @($thresholdPolicies | Where-Object { $_.conditions[0].minCount -ne 1 }).Count -gt 0) {
-        $errors.Add('Each PII workload requires an inclusive 1-199 occurrence policy.')
+    if ($thresholdPolicies.Count -ne 1 -or @($thresholdPolicies | Where-Object { $_.conditions[0].minCount -ne 1 }).Count -gt 0) {
+        $errors.Add('One consolidated PII policy must cover the inclusive 1-199 occurrence band.')
     }
     $escalationPolicies = @($policies | Where-Object { $_.family -eq 'pii' -and $_.conditions[0].minCount -eq 200 -and $null -eq $_.conditions[0].maxCount })
-    if ($escalationPolicies.Count -ne 3) {
-        $errors.Add('Each PII workload requires an unbounded 200+ occurrence policy.')
+    if ($escalationPolicies.Count -ne 2) {
+        $errors.Add('PII requires separate file and Exchange policies for the unbounded 200+ occurrence band.')
+    }
+    foreach ($workload in @('SharePoint', 'OneDrive', 'Exchange')) {
+        if (@($bcsiPolicies | Where-Object { $workload -in $_.workload }).Count -ne 1 -or
+            @($thresholdPolicies | Where-Object { $workload -in $_.workload -and $_.targetLabelKey -eq 'confidential-internal' }).Count -ne 1 -or
+            @($escalationPolicies | Where-Object { $workload -in $_.workload }).Count -ne 1) {
+            $errors.Add("Workload '$workload' must have exactly one BCSI, PII 1-199 and PII 200+ policy.")
+        }
+    }
+    foreach ($policy in $escalationPolicies) {
+        if ('Exchange' -in $policy.workload) {
+            if ($policy.workload.Count -ne 1 -or $policy.targetLabelKey -ne 'highly-confidential-recipients' -or $policy.protectionAction -ne 'do-not-forward') {
+                $errors.Add('PII 200+ Exchange must retain its Exchange-only Recipients Only / Do Not Forward label.')
+            }
+        }
+        elseif ($policy.targetLabelKey -ne 'highly-confidential-internal') {
+            $errors.Add('PII 200+ file workloads must retain Highly Confidential / Internal Only.')
+        }
     }
     if ($RequireTenantValues) {
         if ($environment.tenant.id -eq '00000000-0000-0000-0000-000000000000' -or $environment.tenant.labelScheme -ne 'modern') {
@@ -370,7 +387,7 @@ function Get-PurviewDeploymentPlan {
             Key = $policy.key
             Desired = $policy.mode
             Family = $policy.family
-            Workload = $policy.workload
+            Workloads = @($policy.workload)
             TargetLabel = $policy.targetLabelKey
             LiveSupport = 'Create only in simulation; each sensitive-information detector is an independent rule. Verify behavior and propagation in tenant.'
         })
@@ -711,19 +728,24 @@ function Get-PurviewAutoPolicyArgument {
         Priority = [int]$targetLabel.priority
         OverwriteLabel = $false
     }
-    $scopeName = switch ($Policy.workload) {
-        'SharePoint' { 'sharePointLocations' }
-        'OneDrive' { 'oneDriveLocations' }
-        'Exchange' { 'exchangeLocations' }
-        default { throw "Unsupported auto-label workload '$($Policy.workload)'." }
+    $configured = $false
+    foreach ($workload in $Policy.workload) {
+        $scopeName = switch ($workload) {
+            'SharePoint' { 'sharePointLocations' }
+            'OneDrive' { 'oneDriveLocations' }
+            'Exchange' { 'exchangeLocations' }
+            default { throw "Unsupported auto-label workload '$workload'." }
+        }
+        $locations = @($Definitions.Environment.scopes[$scopeName] | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+        if ($locations.Count -eq 0) { continue }
+        $configured = $true
+        switch ($workload) {
+            'SharePoint' { $arguments.SharePointLocation = $locations }
+            'OneDrive' { $arguments.OneDriveLocation = $locations }
+            'Exchange' { $arguments.ExchangeLocation = $locations }
+        }
     }
-    $locations = @($Definitions.Environment.scopes[$scopeName] | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
-    if ($locations.Count -eq 0) { return $null }
-    switch ($Policy.workload) {
-        'SharePoint' { $arguments.SharePointLocation = $locations }
-        'OneDrive' { $arguments.OneDriveLocation = $locations }
-        'Exchange' { $arguments.ExchangeLocation = $locations }
-    }
+    if (-not $configured) { return $null }
     return $arguments
 }
 
@@ -757,7 +779,10 @@ function Test-PurviewAutoRuleMatch {
         [string]$Actual.Policy -eq [string]$Expected.Policy
     }
     if (-not $policyMatches) { return $false }
-    if ([string]$Actual.Workload -ne [string]$Expected.Workload -and [string]$Actual.Workload -notmatch [regex]::Escape([string]$Expected.Workload)) { return $false }
+    $actualWorkloads = @([string]$Actual.Workload -split ',\s*' | ForEach-Object { $_.Trim() })
+    foreach ($workload in ([string]$Expected.Workload -split ',\s*')) {
+        if ($workload -notin $actualWorkloads) { return $false }
+    }
     foreach ($propertyName in @('ContentContainsSensitiveInformation', 'ExceptIfContentContainsSensitiveInformation')) {
         $actualProperty = $Actual.PSObject.Properties[$propertyName]
         $expectedValue = if ($Expected.ContainsKey($propertyName)) { $Expected[$propertyName] } else { @() }
@@ -779,15 +804,40 @@ function Test-PurviewAutoRuleMatch {
     return $true
 }
 
+function Get-PurviewAutoRuleDefinition {
+    param([Parameter(Mandatory)]$Policy, [Parameter(Mandatory)]$Definitions)
+    foreach ($workload in $Policy.workload) {
+        $scope = switch ($workload) {
+            'SharePoint' { 'sharePointLocations' }
+            'OneDrive' { 'oneDriveLocations' }
+            'Exchange' { 'exchangeLocations' }
+        }
+        if (@($Definitions.Environment.scopes[$scope] | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }).Count -eq 0) { continue }
+        foreach ($condition in $Policy.conditions) {
+            $key = if (@($Policy.workload).Count -eq 1) { [string]$condition.sitKey } else { "$($condition.sitKey)-$workload" }
+            [pscustomobject]@{ Key = $key; Workload = $workload; Condition = $condition }
+        }
+    }
+}
+
 function Get-PurviewAutoRuleArgument {
-    param([Parameter(Mandatory)]$Policy, [Parameter(Mandatory)]$Condition, [Parameter(Mandatory)]$Definitions)
+    param(
+        [Parameter(Mandatory)]$Policy, [Parameter(Mandatory)]$Condition, [Parameter(Mandatory)]$Definitions,
+        [ValidateSet('SharePoint', 'OneDrive', 'Exchange')][string]$Workload
+    )
+    if (-not $Workload) {
+        if (@($Policy.workload).Count -ne 1) { throw 'A multi-workload policy requires one explicit workload per rule.' }
+        $Workload = [string]$Policy.workload[0]
+    }
+    if ($Workload -notin $Policy.workload) { throw "Rule workload '$Workload' is outside policy '$($Policy.key)'." }
     $sitName = Get-PurviewSensitiveInformationTypeName -SitKey $Condition.sitKey -Definitions $Definitions
+    $ruleKey = if (@($Policy.workload).Count -eq 1) { [string]$Condition.sitKey } else { "$($Condition.sitKey)-$Workload" }
     $match = @{ Name = $sitName; minCount = [string]$Condition.minCount }
     if ($Condition.minConfidence) { $match.minConfidence = [string]$Condition.minConfidence }
     $arguments = @{
-        Name = "$($Policy.key)-$($Condition.sitKey)"
+        Name = "$($Policy.key)-$ruleKey"
         Policy = [string]$Policy.name
-        Workload = [string]$Policy.workload
+        Workload = if ($Workload -eq 'OneDrive') { 'OneDriveForBusiness' } else { $Workload }
         ContentContainsSensitiveInformation = @($match)
     }
     if ($null -ne $Condition.maxCount) {
@@ -889,18 +939,18 @@ function Invoke-PurviewDeployment {
                 throw "Owned auto-label policy '$($policy.key)' is missing by ID, but another policy uses its name; refusing to adopt or duplicate it."
             }
         }
-        foreach ($condition in $policy.conditions) {
-            $ruleName = "$($policy.key)-$($condition.sitKey)"
-            $ownedRuleId = if ($ownedPolicy -and $ownedPolicy.rules) { [string]$ownedPolicy.rules[$condition.sitKey] } else { '' }
+        foreach ($rule in (Get-PurviewAutoRuleDefinition -Policy $policy -Definitions $definitions)) {
+            $ruleName = "$($policy.key)-$($rule.Key)"
+            $ownedRuleId = if ($ownedPolicy -and $ownedPolicy.rules) { [string]$ownedPolicy.rules[$rule.Key] } else { '' }
             if (-not $ownedRuleId -and @($existingAutoRules | Where-Object { [string]$_.Name -eq $ruleName }).Count -gt 0) {
                 throw "Auto-label rule name collision for '$ruleName'; refusing to adopt the existing rule."
             }
             if ($ownedRuleId) {
                 $actualRule = Get-AutoSensitivityLabelRule -Identity $ownedRuleId -ErrorAction Stop
                 if ($actualRule) {
-                    $expectedRule = Get-PurviewAutoRuleArgument -Policy $policy -Condition $condition -Definitions $definitions
+                    $expectedRule = Get-PurviewAutoRuleArgument -Policy $policy -Condition $rule.Condition -Definitions $definitions -Workload $rule.Workload
                     if (-not (Test-PurviewAutoRuleMatch -Actual $actualRule -Expected $expectedRule -PolicyGuid ([string]$ownedPolicy.policyId))) {
-                        throw "Owned auto-label rule '$($policy.key)/$($condition.sitKey)' has condition drift; apply stopped before any tenant mutation."
+                        throw "Owned auto-label rule '$($policy.key)/$($rule.Key)' has condition drift; apply stopped before any tenant mutation."
                     }
                 }
                 elseif (@($existingAutoRules | Where-Object { [string]$_.Name -eq $ruleName }).Count -gt 0) {
@@ -1095,9 +1145,9 @@ function Invoke-PurviewDeployment {
             Save-PurviewInventory -InventoryPath $inventoryPath -Inventory $inventory
         }
 
-        foreach ($condition in $policy.conditions) {
-            $ruleArguments = Get-PurviewAutoRuleArgument -Policy $policy -Condition $condition -Definitions $definitions
-            $ruleKey = "$($condition.sitKey)"
+        foreach ($rule in (Get-PurviewAutoRuleDefinition -Policy $policy -Definitions $definitions)) {
+            $ruleArguments = Get-PurviewAutoRuleArgument -Policy $policy -Condition $rule.Condition -Definitions $definitions -Workload $rule.Workload
+            $ruleKey = $rule.Key
             $ownedRuleId = [string]$inventory.policies[$policy.key].rules[$ruleKey]
             $actualRule = if ($ownedRuleId) { Get-AutoSensitivityLabelRule -Identity $ownedRuleId -ErrorAction Stop } else { $null }
             if (-not $actualRule) {
@@ -1191,23 +1241,23 @@ function Get-PurviewDriftReport {
             Expected = $policy.name
             Actual = $actual.Name
         })
-        foreach ($condition in $policy.conditions) {
-            $ruleId = if ($owned.rules) { [string]$owned.rules[$condition.sitKey] } else { '' }
+        foreach ($rule in (Get-PurviewAutoRuleDefinition -Policy $policy -Definitions $definitions)) {
+            $ruleId = if ($owned.rules) { [string]$owned.rules[$rule.Key] } else { '' }
             if (-not $ruleId) {
-                $rows.Add([pscustomobject]@{ Key = "$($policy.key)/$($condition.sitKey)"; Kind = 'AutoLabelRule'; Status = 'NotInInventory'; Expected = $condition.sitKey; Actual = $null })
+                $rows.Add([pscustomobject]@{ Key = "$($policy.key)/$($rule.Key)"; Kind = 'AutoLabelRule'; Status = 'NotInInventory'; Expected = $rule.Key; Actual = $null })
                 continue
             }
             $actualRule = Get-AutoSensitivityLabelRule -Identity $ruleId -ErrorAction Stop
             if (-not $actualRule) {
-                $rows.Add([pscustomobject]@{ Key = "$($policy.key)/$($condition.sitKey)"; Kind = 'AutoLabelRule'; Status = 'Missing'; Expected = $condition.sitKey; Actual = $null })
+                $rows.Add([pscustomobject]@{ Key = "$($policy.key)/$($rule.Key)"; Kind = 'AutoLabelRule'; Status = 'Missing'; Expected = $rule.Key; Actual = $null })
                 continue
             }
-            $expectedRule = Get-PurviewAutoRuleArgument -Policy $policy -Condition $condition -Definitions $definitions
+            $expectedRule = Get-PurviewAutoRuleArgument -Policy $policy -Condition $rule.Condition -Definitions $definitions -Workload $rule.Workload
             $rows.Add([pscustomobject]@{
-                Key = "$($policy.key)/$($condition.sitKey)"
+                Key = "$($policy.key)/$($rule.Key)"
                 Kind = 'AutoLabelRule'
                 Status = if (Test-PurviewAutoRuleMatch -Actual $actualRule -Expected $expectedRule -PolicyGuid ([string]$owned.policyId)) { 'NoChange' } else { 'Drift' }
-                Expected = $condition.sitKey
+                Expected = $rule.Key
                 Actual = $actualRule.Name
             })
         }
@@ -1283,13 +1333,13 @@ function Enable-PurviewAutoLabeling {
         if (-not $expectedPolicy -or -not (Test-PurviewAutoPolicyMatch -Actual $actual -Expected $expectedPolicy)) {
             throw "Activation blocked: policy '$($policy.key)' no longer matches the reviewed simulation configuration."
         }
-        foreach ($condition in $policy.conditions) {
-            $ruleKey = [string]$condition.sitKey
+        foreach ($rule in (Get-PurviewAutoRuleDefinition -Policy $policy -Definitions $definitions)) {
+            $ruleKey = $rule.Key
             $ruleId = if ($owned.rules) { [string]$owned.rules[$ruleKey] } else { '' }
             if (-not $ruleId) { throw "Activation blocked: rule '$($policy.key)/$ruleKey' is not inventory-owned." }
             $actualRule = Get-AutoSensitivityLabelRule -Identity $ruleId -ErrorAction Stop
-            $expectedRule = Get-PurviewAutoRuleArgument -Policy $policy -Condition $condition -Definitions $definitions
-            if (-not $actualRule -or -not (Test-PurviewAutoRuleMatch -Actual $actualRule -Expected $expectedRule)) {
+            $expectedRule = Get-PurviewAutoRuleArgument -Policy $policy -Condition $rule.Condition -Definitions $definitions -Workload $rule.Workload
+            if (-not $actualRule -or -not (Test-PurviewAutoRuleMatch -Actual $actualRule -Expected $expectedRule -PolicyGuid ([string]$owned.policyId))) {
                 throw "Activation blocked: rule '$($policy.key)/$ruleKey' no longer matches the reviewed simulation configuration."
             }
         }
