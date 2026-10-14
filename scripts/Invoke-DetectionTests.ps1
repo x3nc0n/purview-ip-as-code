@@ -14,7 +14,7 @@ $results = foreach ($fixture in $manifest.fixtures) {
     $matchedConfidence = 0
     foreach ($detector in $detection.detectors) {
         foreach ($pattern in $detector.patterns | Sort-Object confidence -Descending) {
-            $primaryMatches = [regex]::Matches($text, $pattern.primaryRegex, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            $primaryMatches = [regex]::Matches($text, $pattern.primaryRegex, [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)
             if ($primaryMatches.Count -eq 0) { continue }
             $satisfied = $true
             foreach ($support in $pattern.supportRegexes) {
@@ -22,7 +22,7 @@ $results = foreach ($fixture in $manifest.fixtures) {
                 foreach ($primary in $primaryMatches) {
                     $start = [Math]::Max(0, $primary.Index - 300)
                     $length = [Math]::Min($text.Length - $start, $primary.Length + 600)
-                    if ([regex]::IsMatch($text.Substring($start, $length), $support, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+                    if ([regex]::IsMatch($text.Substring($start, $length), $support, [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)) {
                         $nearby = $true
                         break
                     }

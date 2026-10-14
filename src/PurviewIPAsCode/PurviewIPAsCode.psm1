@@ -102,6 +102,22 @@ function Test-PurviewConfiguration {
         if ($label.protection.groupKey -and $label.protection.groupKey -notin $groupKeys) {
             $errors.Add("Label '$($label.key)' references missing group '$($label.protection.groupKey)'.")
         }
+        if ($label.ContainsKey('container') -and (@('Site', 'UnifiedGroup') | Where-Object { $_ -notin $label.scopes })) {
+            $errors.Add("Container label '$($label.key)' requires Site and UnifiedGroup scopes.")
+        }
+        if ($label.ContainsKey('autoLabeling')) {
+            if (@($labels | Where-Object parent -eq $label.key).Count -gt 0 -or $label.protection.mode -eq 'user-defined') {
+                $errors.Add("Auto-labeling requires a selectable label with no user-defined encryption: '$($label.key)'.")
+            }
+            foreach ($condition in $label.autoLabeling.conditions) {
+                if ($condition.sitKey -notin @($detectorKeys) + @('us-ssn')) {
+                    $errors.Add("Label '$($label.key)' references unknown SIT '$($condition.sitKey)'.")
+                }
+                if ($null -ne $condition.maxCount -and $condition.maxCount -lt $condition.minCount) {
+                    $errors.Add("Label '$($label.key)' has a maximum count below its minimum.")
+                }
+            }
+        }
     }
 
     $bes = @($labels | Where-Object key -eq 'highly-confidential-bes')
@@ -371,6 +387,9 @@ function Get-PurviewDeploymentPlan {
             Parent = $label.parent
             Priority = $label.priority
             Protection = $label.protection.mode
+            Scopes = if ($label.ContainsKey('scopes')) { @($label.scopes) } else { @('File', 'Email') }
+            AutoLabeling = if ($label.ContainsKey('autoLabeling')) { $label.autoLabeling } else { $null }
+            Container = if ($label.ContainsKey('container')) { $label.container } else { $null }
             LiveSupport = 'Create only when absent or update only with a matching GUID in the local managed inventory.'
         })
     }
@@ -445,10 +464,10 @@ function Get-PurviewAdapterCapability {
             'Get-OrganizationConfig' = @()
             'Get-Label' = @('Identity')
             'New-Label' = @('Name', 'DisplayName', 'Tooltip', 'ContentType', 'IsLabelGroup', 'ParentId', 'EncryptionEnabled', 'EncryptionProtectionType', 'EncryptionRightsDefinitions', 'EncryptionOfflineAccessDays', 'EncryptionContentExpiredOnDateInDaysOrNever', 'EncryptionPromptUser', 'EncryptionDoNotForward')
-            'Set-Label' = @('Identity', 'DisplayName', 'Tooltip', 'ContentType', 'ParentId', 'Priority', 'EncryptionEnabled', 'EncryptionProtectionType', 'EncryptionRightsDefinitions', 'EncryptionOfflineAccessDays', 'EncryptionContentExpiredOnDateInDaysOrNever', 'EncryptionPromptUser', 'EncryptionDoNotForward')
+            'Set-Label' = @('Identity', 'DisplayName', 'Tooltip', 'ContentType', 'ParentId', 'Priority', 'EncryptionEnabled', 'EncryptionProtectionType', 'EncryptionRightsDefinitions', 'EncryptionOfflineAccessDays', 'EncryptionContentExpiredOnDateInDaysOrNever', 'EncryptionPromptUser', 'EncryptionDoNotForward', 'Conditions', 'SiteAndGroupProtectionEnabled', 'SiteAndGroupProtectionPrivacy', 'SiteAndGroupProtectionAllowAccessToGuestUsers', 'SiteExternalSharingControlType')
             'Get-DlpSensitiveInformationTypeRulePackage' = @('Identity')
             'New-DlpSensitiveInformationTypeRulePackage' = @('FileData')
-            'Set-DlpSensitiveInformationTypeRulePackage' = @('FileData')
+            'Set-DlpSensitiveInformationTypeRulePackage' = @('FileData', 'Confirm')
             'Get-AutoSensitivityLabelPolicy' = @('Identity')
             'New-AutoSensitivityLabelPolicy' = @('Name', 'ApplySensitivityLabel', 'Mode', 'Priority', 'SharePointLocation', 'OneDriveLocation', 'ExchangeLocation', 'OverwriteLabel')
             'Get-AutoSensitivityLabelRule' = @('Identity')
@@ -491,7 +510,7 @@ function Get-PurviewAdapterCapability {
         ReadyForApply = ($Adapter -eq 'Service' -and @($results | Where-Object { -not $_.Available }).Count -eq 0)
         Commands = @($results)
         Notes = if ($Adapter -eq 'Scanner') {
-            @('The documented scanner command surface does not expose a label-condition rule writer. This capability probe is necessary but not sufficient to prove BCSI/PII label conditions or manual-label behavior.', 'Enforcement is not supported by this adapter.')
+            @('Label conditions are managed separately through Security & Compliance Set-Label -Conditions. This scanner capability probe does not prove native detections or manual-label behavior.', 'Enforcement is not supported by this adapter.')
         } else {
             @('Command discovery proves parameter availability only. It does not prove tenant licensing, permission, label-scheme compatibility, propagation, or behavior.', 'Label publishing is blocked when the configured recipient audience cannot be represented by the documented New-LabelPolicy cmdlet.')
         }
@@ -587,7 +606,7 @@ function Get-PurviewLabelArgument {
         Name = $internalName
         DisplayName = [string]$Label.name
         Tooltip = [string]$Label.description
-        ContentType = @('File', 'Email')
+        ContentType = if ($Label.ContainsKey('scopes')) { @($Label.scopes) } else { @('File', 'Email') }
         IsLabelGroup = [bool](@($Definitions.Labels | Where-Object parent -eq $Label.key).Count -gt 0)
         ParentId = $parentId
         Priority = [int]$Label.priority
@@ -599,6 +618,156 @@ function Get-PurviewLabelArgument {
         EncryptionPromptUser = $promptUser
         EncryptionDoNotForward = [bool]$Label.protection.doNotForward
         EncryptionEncryptOnly = [bool]($protectionType -eq 'UserDefined' -and -not $Label.protection.doNotForward)
+    }
+}
+
+function Get-PurviewLabelConfigurationArgument {
+    param([Parameter(Mandatory)]$Label, [Parameter(Mandatory)]$Definitions)
+    $arguments = @{ ContentType = 'File, Email' }
+    if ($Label.ContainsKey('scopes')) { $arguments.ContentType = (@($Label.scopes) -join ', ') }
+    if ($Label.ContainsKey('container')) {
+        $arguments.SiteAndGroupProtectionEnabled = $true
+        $arguments.SiteAndGroupProtectionPrivacy = [string]$Label.container.privacy
+        $arguments.SiteAndGroupProtectionAllowAccessToGuestUsers = [bool]$Label.container.allowGuests
+        $arguments.SiteExternalSharingControlType = [string]$Label.container.externalSharing
+    }
+    if ($Label.ContainsKey('autoLabeling')) {
+        $items = foreach ($condition in $Label.autoLabeling.conditions) {
+            $name = Get-PurviewSensitiveInformationTypeName -SitKey $condition.sitKey -Definitions $Definitions
+            if ($condition.sitKey -eq 'us-ssn') {
+                $id = 'a44669fe-0d48-453d-a9b1-2cc83f2cba77'
+                $packageId = '00000000-0000-0000-0000-000000000000'
+            }
+            else {
+                $detector = $Definitions.Detection.detectors | Where-Object key -eq $condition.sitKey | Select-Object -First 1
+                $id = [string]$detector.entityId
+                $packageId = [string]$Definitions.Detection.package.id
+            }
+            $settings = [ordered]@{
+                mincount = [string]$condition.minCount
+                maxcount = if ($null -eq $condition.maxCount) { '-1' } else { [string]$condition.maxCount }
+                minconfidence = [string]$condition.minConfidence
+                maxconfidence = '100'
+                confidencelevel = switch ($condition.minConfidence) { 65 { 'Low' }; 75 { 'Medium' }; 85 { 'High' } }
+                rulepackage = $packageId
+                name = $name
+                groupname = 'Default'
+            }
+            # Automatic is the default wire behavior; only recommendations need autoapplytype.
+            if ($Label.autoLabeling.mode -eq 'Recommend') { $settings.autoapplytype = 'Recommend' }
+            [ordered]@{
+                Key = 'CCSI'
+                Value = $id
+                Properties = $null
+                Settings = @($settings.GetEnumerator() | ForEach-Object { @{ Key = $_.Key; Value = $_.Value } })
+            }
+        }
+        $arguments.Conditions = ([ordered]@{ And = @(@{ Or = @($items) }) } | ConvertTo-Json -Depth 12 -Compress)
+    }
+    return $arguments
+}
+
+function Get-PurviewConditionSignature {
+    param([AllowNull()]$Conditions)
+    if (-not $Conditions -or @($Conditions).Count -eq 0) { return '' }
+    $signatures = foreach ($condition in @($Conditions)) {
+        $document = [string]$condition | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+        if (@($document.Keys).Count -ne 1 -or -not $document.ContainsKey('And') -or @($document.And).Count -ne 1) {
+            throw 'Unsupported label condition structure; expected one And/Or group.'
+        }
+        $group = $document.And[0]
+        if (@($group.Keys).Count -ne 1 -or -not $group.ContainsKey('Or')) { throw 'Unsupported label condition group; expected Or.' }
+        $leaves = foreach ($item in $group.Or) {
+            if ($item.Key -ne 'CCSI' -or $item.Properties) { throw 'Unsupported label condition; expected a sensitive information type.' }
+            $settings = @{}
+            foreach ($setting in $item.Settings) {
+                if ($settings.ContainsKey($setting.Key)) { throw "Duplicate label condition setting '$($setting.Key)'." }
+                $settings[$setting.Key] = [string]$setting.Value
+            }
+            if (-not $settings.ContainsKey('autoapplytype')) { $settings.autoapplytype = 'Automatic' }
+            $pairs = @($settings.Keys | Sort-Object | ForEach-Object { "$_=$($settings[$_])" })
+            "$($item.Key):$($item.Value):$($pairs -join '|')"
+        }
+        @($leaves | Sort-Object) -join ';'
+    }
+    return (@($signatures | Sort-Object) -join "`n")
+}
+
+function Test-PurviewLabelConfigurationMatch {
+    param([Parameter(Mandatory)]$Actual, [Parameter(Mandatory)]$Expected)
+    $actualTypes = @([string]$Actual.ContentType -split ',\s*' | Sort-Object)
+    $expectedTypes = @([string]$Expected.ContentType -split ',\s*' | Sort-Object)
+    if (@($expectedTypes | Where-Object { $_ -notin $actualTypes }).Count -gt 0) { return $false }
+    if ($Expected.ContainsKey('Conditions')) {
+        if ((Get-PurviewConditionSignature (Get-PurviewPropertyValue -Object $Actual -Name 'Conditions')) -ne (Get-PurviewConditionSignature $Expected.Conditions)) { return $false }
+    }
+    if ($Expected.ContainsKey('SiteAndGroupProtectionEnabled')) {
+        $actions = @((Get-PurviewPropertyValue -Object $Actual -Name 'LabelActions') | ForEach-Object { [string]$_ | ConvertFrom-Json -AsHashtable -ErrorAction Stop })
+        $group = @($actions | Where-Object Type -eq 'protectgroup')
+        $site = @($actions | Where-Object Type -eq 'protectsite')
+        if ($group.Count -ne 1 -or $site.Count -ne 1) { return $false }
+        $groupSettings = @{}
+        foreach ($setting in $group[0].Settings) { $groupSettings[$setting.Key] = [string]$setting.Value }
+        $siteSettings = @{}
+        foreach ($setting in $site[0].Settings) { $siteSettings[$setting.Key] = [string]$setting.Value }
+        if ($groupSettings.disabled -ne 'false' -or $groupSettings.privacy -ne $Expected.SiteAndGroupProtectionPrivacy) { return $false }
+        if ($groupSettings.allowaccesstoguestusers -ne ([string]$Expected.SiteAndGroupProtectionAllowAccessToGuestUsers)) { return $false }
+        if ($siteSettings.externalsharingcontroltype -ne $Expected.SiteExternalSharingControlType) { return $false }
+    }
+    return $true
+}
+
+function Invoke-PurviewLabelConfiguration {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)][string]$EnvironmentPath,
+        [string]$InventoryPath = '.purview-state\managed-inventory.json',
+        [switch]$Apply
+    )
+    $validation = Test-PurviewConfiguration -EnvironmentPath $EnvironmentPath -RequireTenantValues:$Apply
+    if (-not $validation.Valid) { throw "Configuration validation failed: $($validation.Errors -join '; ')" }
+    $definitions = Get-PurviewDefinition $EnvironmentPath
+    $plan = @($definitions.Labels | Where-Object { $key = $_.key; @($definitions.Labels | Where-Object parent -eq $key).Count -eq 0 } | ForEach-Object {
+        [pscustomobject]@{ Key = $_.key; Arguments = (Get-PurviewLabelConfigurationArgument -Label $_ -Definitions $definitions) }
+    })
+    if (-not $Apply) { return $plan }
+    $inventory = Assert-PurviewInventory -InventoryPath (Get-PurviewConfigPath $InventoryPath) -TenantId $definitions.Environment.tenant.id
+    Assert-PurviewTenantContext -TenantId $definitions.Environment.tenant.id
+    foreach ($name in 'ContentType', 'Conditions', 'SiteAndGroupProtectionEnabled', 'SiteAndGroupProtectionPrivacy', 'SiteAndGroupProtectionAllowAccessToGuestUsers', 'SiteExternalSharingControlType') {
+        if (-not (Get-Command Set-Label -ErrorAction Stop).Parameters.ContainsKey($name)) { throw "Set-Label lacks required parameter '$name'." }
+    }
+    $prepared = foreach ($entry in $plan) {
+        $id = [string]$inventory.labels[$entry.Key]
+        if (-not $id) { throw "Label '$($entry.Key)' is not inventory-owned; reconcile it first." }
+        $actual = Get-PurviewLabelById -Identity $id
+        if (-not $actual) { throw "Inventory-owned label '$($entry.Key)' is missing." }
+        $entry.Arguments.ContentType = (@(([string]$actual.ContentType -split ',\s*') + ([string]$entry.Arguments.ContentType -split ',\s*') |
+            Where-Object { $_ } | Select-Object -Unique) -join ', ')
+        if ($entry.Arguments.ContainsKey('Conditions')) {
+            $document = $entry.Arguments.Conditions | ConvertFrom-Json -AsHashtable
+            foreach ($item in $document.And[0].Or) {
+                $sit = Get-DlpSensitiveInformationType -Identity $item.Value -ErrorAction Stop
+                if ([string]$sit.Id -ne [string]$item.Value) { throw "Required SIT '$($item.Value)' was not resolved." }
+            }
+        }
+        [pscustomobject]@{ Key = $entry.Key; Id = $id; Actual = $actual; Arguments = $entry.Arguments }
+    }
+    if (-not $PSCmdlet.ShouldProcess($definitions.Environment.tenant.id, 'Reconcile inventory-owned label conditions, scopes and container protections')) { return }
+    $backupPath = "$(Get-PurviewConfigPath $InventoryPath).label-config-backup-$([datetime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')).json"
+    @($prepared | ForEach-Object { @{ Key = $_.Key; Id = $_.Id; ContentType = $_.Actual.ContentType; Conditions = @(Get-PurviewPropertyValue -Object $_.Actual -Name 'Conditions'); LabelActions = @(Get-PurviewPropertyValue -Object $_.Actual -Name 'LabelActions') } }) |
+        ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $backupPath -Encoding utf8
+    foreach ($entry in $prepared) {
+        $status = 'NoChange'
+        if (-not (Test-PurviewLabelConfigurationMatch -Actual $entry.Actual -Expected $entry.Arguments)) {
+            $arguments = $entry.Arguments
+            Set-Label -Identity $entry.Id @arguments -ErrorAction Stop | Out-Null
+            $status = 'Updated'
+        }
+        $verified = Get-PurviewLabelById -Identity $entry.Id
+        if (-not (Test-PurviewLabelConfigurationMatch -Actual $verified -Expected $entry.Arguments)) {
+            throw "Read-back verification failed for label '$($entry.Key)'; backup: $backupPath"
+        }
+        [pscustomobject]@{ Key = $entry.Key; Kind = 'LabelConfiguration'; Id = $entry.Id; Status = $status }
     }
 }
 
@@ -1094,12 +1263,16 @@ function Invoke-PurviewDeployment {
         }
         $version = [string]$package.Version
         if ($version -ne [string]$definitions.Detection.package.version) {
-            Set-DlpSensitiveInformationTypeRulePackage -FileData $packageBytes -ErrorAction Stop | Out-Null
+            Set-DlpSensitiveInformationTypeRulePackage -FileData $packageBytes -Confirm:$false -ErrorAction Stop | Out-Null
             $actions.Add([pscustomobject]@{ Key = 'bcsi-rule-package'; Kind = 'SensitiveInformationTypePackage'; Status = 'Updated'; Id = $packageId })
         }
         else { $actions.Add([pscustomobject]@{ Key = 'bcsi-rule-package'; Kind = 'SensitiveInformationTypePackage'; Status = 'NoChange'; Id = $packageId }) }
         $inventory.rulePackageId = $packageId
         Save-PurviewInventory -InventoryPath $inventoryPath -Inventory $inventory
+    }
+
+    foreach ($configurationAction in (Invoke-PurviewLabelConfiguration -EnvironmentPath $EnvironmentPath -InventoryPath $inventoryPath -Apply)) {
+        $actions.Add($configurationAction)
     }
 
     foreach ($policy in $definitions.Policies) {
@@ -1212,10 +1385,12 @@ function Get-PurviewDriftReport {
             continue
         }
         $expected = Get-PurviewLabelArgument -Label $label -Definitions (@{ Labels = $definitions.Labels; Environment = $definitions.Environment; Inventory = $inventory })
+        $expectedConfiguration = Get-PurviewLabelConfigurationArgument -Label $label -Definitions $definitions
         $rows.Add([pscustomobject]@{
             Key = $label.key
             Kind = 'Label'
-            Status = if (Test-PurviewLabelMatch -Actual $actual -Expected $expected) { 'NoChange' } else { 'Drift' }
+            Status = if ((Test-PurviewLabelMatch -Actual $actual -Expected $expected) -and
+                ($expected.IsLabelGroup -or (Test-PurviewLabelConfigurationMatch -Actual $actual -Expected $expectedConfiguration))) { 'NoChange' } else { 'Drift' }
             Expected = $label.name
             Actual = $actual.DisplayName
         })
@@ -1381,7 +1556,7 @@ function Set-PurviewScannerDiscovery {
     }
     $configured = $false
     if ($PSCmdlet.ShouldProcess($RepositoryPath, 'Configure scanner discovery without enforcement or relabeling')) {
-        Set-ScannerContentScan -Enforce Off -DiscoverInformationTypes All -LabelFilesByContent Off -RelabelFiles Off -EnforceDefaultLabel Off -EnableDlp On -ErrorAction Stop
+        Set-ScannerContentScan -Enforce Off -DiscoverInformationTypes All -LabelFilesByContent On -RelabelFiles Off -EnforceDefaultLabel Off -EnableDlp Off -ErrorAction Stop
         $existing = Get-ScannerRepository -ErrorAction Stop | Where-Object { [string]$_.Path -eq $RepositoryPath }
         if (-not $existing) {
             Add-ScannerRepository -Path $RepositoryPath -ErrorAction Stop
@@ -1392,10 +1567,10 @@ function Set-PurviewScannerDiscovery {
         State = if ($configured) { 'DiscoveryConfigured' } else { 'Planned' }
         Enforcement = 'Off'
         RelabelFiles = 'Off'
-        LabelFilesByContent = 'Off'
+        LabelFilesByContent = 'On'
         RepositoryPath = $RepositoryPath
         ClassificationLabelsApplied = $false
-        BlockingLimitation = 'The documented cmdlets do not provide a label-condition rule writer; this configuration performs discovery only. Do not claim BCSI/PII label selection or scanner readiness.'
+        BlockingLimitation = 'Label conditions are authored separately through Set-Label -Conditions. This configuration does not establish native detections, manual-label preservation or enforcement readiness.'
     }
 }
 
@@ -1405,6 +1580,7 @@ Export-ModuleMember -Function @(
     'Get-PurviewDeploymentPlan',
     'Initialize-PurviewInventory',
     'Invoke-PurviewDeployment',
+    'Invoke-PurviewLabelConfiguration',
     'Get-PurviewDriftReport',
     'Enable-PurviewAutoLabeling',
     'Get-PurviewAdapterCapability',

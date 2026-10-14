@@ -2,9 +2,15 @@
 
 ## Unreleased
 
+- Adds source-defined label-level automatic SSN tiers and OR-based BCSI conditions, with inventory-backed deployment, private backups, semantic read-back checks and drift reporting. Preserves the separate Exchange Do Not Forward service policy.
+- Adds Groups & sites scopes, private Confidential containers with existing-guest SharePoint sharing, and private Highly Confidential/BES containers with guests and external sharing blocked. Preserves existing extra scopes and low-tier container settings; no existing site or team is relabeled.
+- Adds saved certificate-authenticated PowerShell deployment and label synchronization; deployment credentials remain outside the repository and GitHub.
+
 - Corrects scanner discovery to enable content inspection (`LabelFilesByContent On`) while retaining `Enforce Off`; the previous Off setting bypassed inspection and produced General-only proposals. Disables DLP evaluation by default until an on-premises scanner DLP policy exists. Discovery guards accept explicit runtime booleans but reject missing enforcement or disabled inspection.
 - Keeps completed AD scan evidence bounded by reading summary text as a plain CLR string, avoiding Windows PowerShell provider metadata serialization.
-- The private AD-authenticated Azure Files lab successfully reads all 29 fixtures with zero scan failures and no writes. A reset discovery scan with content inspection enabled still has no reported SIT/condition matches; the tenant labels have empty client-side conditions. Expected PII/BCSI detection and label application are not claimed.
+- Adds supported scanner policy-cache refresh through the qualified domain worker, native BCSI report assertions and persisted evidence. Resets file scan state separately from downloaded label policy.
+- Corrects the access-procedure detector's title-case primary match in SIT package 1.0.0.1 and removes the local runner's implicit case-insensitive override. Uses explicit noninteractive confirmation for package updates inside guarded write blocks.
+- The private AD-authenticated Azure Files lab scan on 2026-10-14 at 23:09 UTC read all 29 fixtures with zero failures: 12 reported BCSI matches and BES proposals. All nine detector/format positives (three SITs in TXT, DOCX and PDF) and four negative controls passed native report checks. Enforcement remains Off, access remains write-denied, and no labels were written. PII detections, manual-label preservation and actual enforcement remain unvalidated.
 - Adds an optional `corp.tiny.local` IaaS AD DS lab workflow with a dedicated uncached AD data disk, encrypted credential transport, AES-256 Azure Files authentication, domain scanner-account migration, and explicitly offline/manual discovery. No Entra Connect or Cloud Sync is installed.
 - Bootstraps restrictive Azure Files ACLs through keyless FilesREST with a temporary share-scoped privileged grant and cleanup. Discovery requires service-account read/no-write checks, validated ACLs and fresh reports covering every UNC fixture; expected SIT detections remain a separate validation.
 - Adds an optional private, unpromoted tiny Windows VM template and `start-stop=workday` tags for new lab VMs. Documents existing-scheduler prerequisites and domain-controller disk/startup requirements; beta.1 assets remain unchanged.

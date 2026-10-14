@@ -12,6 +12,95 @@ The documented `New-LabelPolicy` cmdlet does not expose a recipient-user/group a
 
 Drift reporting requires a connected, read-only-capable Security & Compliance session and an explicit tenant-scoped inventory. It only queries recorded GUIDs; it never adopts objects by display name. `Get-DriftReport.ps1` returns a PowerShell object and can write JSON to a file when `-OutputPath` is supplied.
 
+## Label-level auto-labeling and container scopes
+
+`config\labels.json` owns `scopes`, optional `autoLabeling`, and optional
+`container` settings. These are separate from the service-side policies in
+`config\auto-labeling-policies.json`. The scanner consumes published label
+conditions, not cloud auto-label policies. Conditions also affect supported
+Office clients for every user receiving these labels; they are not scanner-only.
+
+The label conditions use SSN confidence 85 with inclusive 1-199 and 200+ tiers
+on the Internal Only labels. BES uses an OR of the three custom BCSI detectors
+at confidence 85. User-defined Recipients Only encryption is deliberately not
+used for scanner conditions; the Exchange service-side 200+ policy retains its
+Do Not Forward label. Automatic condition application is the default CCSI wire
+behavior; only recommendations serialize `autoapplytype=Recommend`.
+
+All selectable labels include File, Email, Site and UnifiedGroup scopes. Parent
+categories are not independently selectable or configured by this writer. Existing additional
+scopes such as Teamwork are preserved, never silently removed. Public,
+Non-Business and General add no container restrictions. Confidential selectable
+labels enforce private groups/Teams, allow guests, and restrict SharePoint
+external sharing to existing guests. Highly Confidential selectable labels,
+including BES, enforce private groups/Teams, block guests, and disable SharePoint
+external sharing. The existing-guests-only restriction is a **SharePoint sharing**
+control; the group guest switch is boolean and does not independently distinguish
+new from existing guests. File encryption does not govern container membership,
+and a container label does not label or encrypt the files inside it.
+
+Deploy through the saved script with an existing authorized certificate:
+
+```powershell
+.\scripts\Invoke-ConnectedLabelDeployment.ps1 `
+    -EnvironmentPath config\environments\<tenant>.json `
+    -InventoryPath <private-managed-inventory.json> `
+    -AppId <administration-app-id> `
+    -CertificateThumbprint <installed-certificate-thumbprint> `
+    -Organization <tenant>.onmicrosoft.com -Apply
+```
+
+Add `-UpdateDetectionPackage` to this launcher when deploying a versioned
+`config\detection.json` correction. It checks the same tenant/inventory guards,
+backs up the owned SIT package, rebuilds the Unicode XML, updates only that
+package GUID and verifies its version. Without `-Apply` it reports the desired
+and current versions without tenant writes. Keep the original package/SIT IDs;
+do not create duplicate portal classifiers to work around cached policy.
+
+Without `-Apply`, this returns the source-defined plan. A connected operator can
+instead use `Set-LabelConfiguration.ps1`. Normal `Invoke-Deployment.ps1 -Apply`
+also reconciles these settings after the SIT package is available. Writes require
+the correct tenant and inventory-owned GUIDs, preflight every configured SIT,
+save a private label snapshot, and verify conditions and container settings on
+read-back. Reapply performs no label writes when the settings match. The connected
+launcher requests `Execute-AzureAdLabelSync` after reconciliation. Before container
+use, confirm Entra Group.Unified `EnableMIPLabels=True`; the launcher does not
+change unrelated directory settings, assign site labels, or alter existing sites.
+CI validates this code, but Microsoft 365 deployment uses this saved local
+certificate-authenticated launcher unless Actions credentials are separately
+configured. No private keys are committed or uploaded to GitHub.
+
+In Purview, find the custom SITs under **Solutions > Information Protection >
+Classifiers > Sensitive info types**. Filter to custom types and search for:
+**BCSI Explicit Designation**, **BCSI Network and Security Configuration**, or
+**BCSI Access and Security Procedures**. There is no single type named just
+"BCSI". Their stable IDs and publisher are declared in `config\detection.json`.
+Find the label conditions under **Sensitivity labels > edit a selectable label >
+Auto-labeling for files and emails**.
+
+After policy propagation, run the AD lab helper's `RefreshPolicy` stage while the
+scanner is idle. It invokes supported `Start-ScannerDiagnostics -ResetConfig`
+under the domain worker and restarts the service after temporary administrator
+cleanup. This bypasses the four-hour policy-cache interval without editing SDK
+databases or deleting token caches. Then run `StartDiscovery` with a full reset and inspect the
+detailed report. Keep enforcement Off and write-denied ACLs until actual native
+detections, proposed labels, negative controls and manual-label behavior have been
+reviewed. A local regex test or successful tenant write is not scanner evidence.
+`Test-ScannerBcsiDetection.ps1 -BesLabelId <inventory BES GUID>` verifies the three
+positive BCSI scenarios in TXT, DOCX and PDF against the actual native report,
+requiring both SIT matches and BES proposals. It does not validate label writes.
+
+The lab scan ending 2026-10-14 at 23:09:26 UTC reported 29 successful files,
+12 native BCSI matches/BES proposals, and zero label writes. All three detectors
+matched their TXT, DOCX and PDF positives; the four public/isolated-address/
+generic-SCADA/generic-credential controls did not match BCSI. The scanner service
+remained Running as its domain account, with no temporary worker tasks or local
+administrator membership. Evidence is separate from generic discovery readiness:
+PII and manual-label behavior remain unvalidated, so enforcement stays blocked.
+Use `-EvidencePath` on the verifier to retain its JSON beside the protected
+guest scan reports. The lab retains
+`C:\ProgramData\PurviewIPAsCode-AdLab\bcsi-native-evidence.json`.
+
 ## Consolidating an existing nine-policy deployment
 
 Each auto-label policy applies one label, so tier-specific labels cannot be selected by rules inside one policy. The four-policy layout retains BCSI -> Highly Confidential / BES across configured workloads, PII 1-199 -> Confidential / Internal Only across workloads, PII 200+ files -> Highly Confidential / Internal Only, and PII 200+ Exchange -> Highly Confidential / Recipients Only with Do Not Forward. The policy locations are the existing overlay scopes, never an automatic expansion to `All`. PII is specifically the US SSN example, not a general HR classifier.

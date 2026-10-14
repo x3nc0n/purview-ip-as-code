@@ -11,6 +11,7 @@
         'Get-PurviewDeploymentPlan',
         'Initialize-PurviewInventory',
         'Invoke-PurviewDeployment',
+        'Invoke-PurviewLabelConfiguration',
         'Get-PurviewDriftReport',
         'Enable-PurviewAutoLabeling',
         'Get-PurviewAdapterCapability',

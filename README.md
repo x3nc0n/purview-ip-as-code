@@ -10,6 +10,7 @@ Version-controlled Microsoft Purview sensitivity labels, a separately managed BC
 - A deterministic Unicode UTF-16 custom sensitive-information-type (SIT) XML compiler with stable, declared entity identifiers.
 - A PowerShell module and commands for offline validation, plan generation, inventory-backed label/SIT/auto-label reconciliation, guarded activation, and drift reporting.
 - Four simulation policies: BCSI across all configured workloads, PII 1-199 across all workloads, PII 200+ for SharePoint/OneDrive, and PII 200+ for Exchange. The fictional PII threshold is 200 SSN occurrences **in one item**, not unique people or an incident total.
+- Source-defined client/scanner auto-labeling conditions and Groups & sites scopes with tiered privacy/guest/sharing controls; deploy using the saved certificate-authenticated [label deployment script](docs/operations.md#label-level-auto-labeling-and-container-scopes).
 - Synthetic, reproducible detection fixtures and an expected-results manifest.
 - A modular Bicep scanner lab and compiled ARM template with private Azure Files infrastructure, private DNS, managed identity, Key Vault, a Windows VM, and a report-backed discovery bootstrap. The beta scans local fixtures; it does not mount Azure Files.
 - Pull-request validation, tag-built public release assets, and a manually dispatched, environment-protected GitHub deployment workflow.

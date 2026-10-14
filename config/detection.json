@@ -4,7 +4,7 @@
     "id": "2439f4bb-f00c-5c0e-8a73-1ba7048bc146",
     "publisherId": "d8a8e7c1-3f7a-56ec-9e68-bf920bf671d3",
     "name": "Purview IP as code - illustrative BCSI",
-    "version": "1.0.0.0"
+    "version": "1.0.0.1"
   },
   "proximityCharacters": 300,
   "detectors": [
@@ -42,9 +42,9 @@
       "primary": "Structured operator access procedure",
       "supporting": ["BES context", "Authentication or access mechanism"],
       "patterns": [
-        { "confidence": 65, "primaryRegex": "\\b(?:operator access procedure|access control procedure)\\b", "supportRegexes": ["\\b(?:BES|ESP|EACMS)\\b"] },
-        { "confidence": 75, "primaryRegex": "\\b(?:operator access procedure|access control procedure)\\b", "supportRegexes": ["\\b(?:BES|ESP|EACMS)\\b", "\\b(?:badge|MFA|authentication|authorization|jump host)\\b"] },
-        { "confidence": 85, "primaryRegex": "\\b(?:operator access procedure|access control procedure)\\b", "supportRegexes": ["\\b(?:BES|ESP|EACMS)\\b", "\\b(?:badge|MFA|authentication|authorization|jump host)\\b", "\\b(?:review\\w*|approve\\w*|revoke\\w*|audit\\w*|two-person)\\b"] }
+        { "confidence": 65, "primaryRegex": "(?i)\\b(?:operator access procedure|access control procedure)\\b", "supportRegexes": ["\\b(?:BES|ESP|EACMS)\\b"] },
+        { "confidence": 75, "primaryRegex": "(?i)\\b(?:operator access procedure|access control procedure)\\b", "supportRegexes": ["\\b(?:BES|ESP|EACMS)\\b", "\\b(?:badge|MFA|authentication|authorization|jump host)\\b"] },
+        { "confidence": 85, "primaryRegex": "(?i)\\b(?:operator access procedure|access control procedure)\\b", "supportRegexes": ["\\b(?:BES|ESP|EACMS)\\b", "\\b(?:badge|MFA|authentication|authorization|jump host)\\b", "\\b(?:review\\w*|approve\\w*|revoke\\w*|audit\\w*|two-person)\\b"] }
       ]
     }
   ]

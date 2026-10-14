@@ -81,6 +81,7 @@ Describe 'AD lab security and scan contract' {
         $source | Should -Match 'discoveryComplete=\$false'
         $source | Should -Match 'Persisted report predates the requested scan'
         $source | Should -Match '-DiscoverInformationTypes All -EnableDlp Off -LabelFilesByContent On'
+        $source | Should -Match 'Start-ScannerDiagnostics -ResetConfig -OnBehalfOf'
     }
 
     It 'uses protected read-only fixture ACLs and validates actual service-account access' {

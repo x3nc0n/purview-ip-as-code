@@ -1,6 +1,7 @@
 [
   {
     "key": "public",
+    "scopes": ["File", "Email", "Site", "UnifiedGroup"],
     "name": "Public",
     "tier": 0,
     "parent": null,
@@ -10,6 +11,7 @@
   },
   {
     "key": "non-business",
+    "scopes": ["File", "Email", "Site", "UnifiedGroup"],
     "name": "Non-Business",
     "tier": 0,
     "parent": null,
@@ -19,6 +21,7 @@
   },
   {
     "key": "general",
+    "scopes": ["File", "Email", "Site", "UnifiedGroup"],
     "name": "General",
     "tier": 0,
     "parent": null,
@@ -28,6 +31,7 @@
   },
   {
     "key": "confidential",
+    "scopes": ["File", "Email", "Site", "UnifiedGroup"],
     "name": "Confidential",
     "tier": 1,
     "parent": null,
@@ -37,6 +41,8 @@
   },
   {
     "key": "confidential-any-user",
+    "scopes": ["File", "Email", "Site", "UnifiedGroup"],
+    "container": { "privacy": "Private", "allowGuests": true, "externalSharing": "ExistingExternalUserSharingOnly" },
     "name": "Any User (No Protection)",
     "tier": 1,
     "parent": "confidential",
@@ -46,6 +52,12 @@
   },
   {
     "key": "confidential-internal",
+    "scopes": ["File", "Email", "Site", "UnifiedGroup"],
+    "container": { "privacy": "Private", "allowGuests": true, "externalSharing": "ExistingExternalUserSharingOnly" },
+    "autoLabeling": {
+      "mode": "Automatic",
+      "conditions": [{ "sitKey": "us-ssn", "minCount": 1, "maxCount": 199, "minConfidence": 85 }]
+    },
     "name": "Internal Only",
     "tier": 1,
     "parent": "confidential",
@@ -55,6 +67,8 @@
   },
   {
     "key": "confidential-recipients",
+    "scopes": ["File", "Email", "Site", "UnifiedGroup"],
+    "container": { "privacy": "Private", "allowGuests": true, "externalSharing": "ExistingExternalUserSharingOnly" },
     "name": "Recipients Only",
     "tier": 1,
     "parent": "confidential",
@@ -64,6 +78,7 @@
   },
   {
     "key": "highly-confidential",
+    "scopes": ["File", "Email", "Site", "UnifiedGroup"],
     "name": "Highly Confidential",
     "tier": 2,
     "parent": null,
@@ -73,6 +88,8 @@
   },
   {
     "key": "highly-confidential-any-user",
+    "scopes": ["File", "Email", "Site", "UnifiedGroup"],
+    "container": { "privacy": "Private", "allowGuests": false, "externalSharing": "Disabled" },
     "name": "Any User (No Protection)",
     "tier": 2,
     "parent": "highly-confidential",
@@ -82,6 +99,12 @@
   },
   {
     "key": "highly-confidential-internal",
+    "scopes": ["File", "Email", "Site", "UnifiedGroup"],
+    "container": { "privacy": "Private", "allowGuests": false, "externalSharing": "Disabled" },
+    "autoLabeling": {
+      "mode": "Automatic",
+      "conditions": [{ "sitKey": "us-ssn", "minCount": 200, "maxCount": null, "minConfidence": 85 }]
+    },
     "name": "Internal Only",
     "tier": 2,
     "parent": "highly-confidential",
@@ -91,6 +114,8 @@
   },
   {
     "key": "highly-confidential-recipients",
+    "scopes": ["File", "Email", "Site", "UnifiedGroup"],
+    "container": { "privacy": "Private", "allowGuests": false, "externalSharing": "Disabled" },
     "name": "Recipients Only",
     "tier": 2,
     "parent": "highly-confidential",
@@ -100,6 +125,16 @@
   },
   {
     "key": "highly-confidential-bes",
+    "scopes": ["File", "Email", "Site", "UnifiedGroup"],
+    "container": { "privacy": "Private", "allowGuests": false, "externalSharing": "Disabled" },
+    "autoLabeling": {
+      "mode": "Automatic",
+      "conditions": [
+        { "sitKey": "bcsi-explicit-designation", "minCount": 1, "maxCount": null, "minConfidence": 85 },
+        { "sitKey": "bcsi-network-security", "minCount": 1, "maxCount": null, "minConfidence": 85 },
+        { "sitKey": "bcsi-access-procedures", "minCount": 1, "maxCount": null, "minConfidence": 85 }
+      ]
+    },
     "name": "BES",
     "tier": 2,
     "parent": "highly-confidential",

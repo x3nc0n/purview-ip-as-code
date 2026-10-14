@@ -6,6 +6,12 @@ Three custom detectors cover a BCSI designation, network/security configuration,
 
 Every high-confidence BCSI match targets Highly Confidential / BES. No separate "high impact" detector exists, no BCSI rule depends on SSN results, and no policy excludes a simultaneous BCSI/PII match.
 
+The access-procedure primary expression explicitly uses `(?i)` so title-case
+headings such as "Operator access procedure" match. Package version 1.0.0.1
+corrects this mismatch. The local runner no longer implicitly makes every regex
+case-insensitive: intended case behavior must be declared in the expression
+exported to Purview, not supplied only by the test harness.
+
 ## PII counts
 
 The fictional US SSN example counts occurrences in each individual file or Exchange item, not unique people, a mailbox, a site, a time window, or an incident. For SharePoint, OneDrive, and Exchange, 1–199 occurrences target Confidential / Internal Only. At 200 or more, files target Highly Confidential / Internal Only and Exchange targets Highly Confidential / Recipients Only with Do Not Forward. Zero occurrences do not match either PII policy. These values are training examples, not legal thresholds or Microsoft service guarantees.

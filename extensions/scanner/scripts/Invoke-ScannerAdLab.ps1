@@ -1,7 +1,7 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('Prepare', 'Promote', 'Directory', 'StorageIdentity', 'Join', 'FilePermissions', 'Migrate', 'Authenticate', 'StartDiscovery', 'VerifyDiscovery', 'PersistDiscovery', 'Status', 'Worker')]
+    [ValidateSet('Prepare', 'Promote', 'Directory', 'StorageIdentity', 'Join', 'FilePermissions', 'Migrate', 'Authenticate', 'RefreshPolicy', 'StartDiscovery', 'VerifyDiscovery', 'PersistDiscovery', 'Status', 'Worker')]
     [string]$Stage,
     [ValidatePattern('^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+$')][string]$DomainName = 'corp.tiny.local',
     [ValidatePattern('^[a-zA-Z0-9-]{1,15}$')][string]$NetBiosName = 'CORP',
@@ -450,6 +450,15 @@ switch ($Stage) {
         Save-LabDiscoveryReadiness
         Get-Content -LiteralPath (Join-Path $stateDirectory 'scan-result.json') -Raw
     }
+    'RefreshPolicy' {
+        Import-ScannerModule
+        Assert-DiscoveryJob
+        if ([string](Get-ScanStatus).ClusterStatus -ne 'Idle') { throw 'Policy refresh requires an idle scanner.' }
+        Set-LabReadiness @{ discoveryComplete=$false; readyForEnforcement=$false; enforcementEnabled=$false }
+        Invoke-LabWorker 'RefreshPolicy'
+        Restart-Service MIPScanner -ErrorAction Stop
+        Write-Output 'PolicyCacheResetRequested; run a full discovery scan and verify actual detections.'
+    }
     'PersistDiscovery' {
         Save-LabDiscoveryReadiness
         Write-Output 'DomainAzureFilesDiscoveryReadinessUpdated'
@@ -472,6 +481,15 @@ switch ($Stage) {
             $secret = $null
             $token = $null
             [pscustomobject]@{ ServiceAccount=$serviceUser; Profile=$env:USERPROFILE; AuthenticationConfigured=$true } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stateDirectory 'authentication-result.json')
+            break
+        }
+        if ($WorkerOperation -eq 'RefreshPolicy') {
+            $command = Get-Command Start-ScannerDiagnostics -ErrorAction Stop
+            foreach ($name in @('ResetConfig', 'OnBehalfOf')) {
+                if (-not $command.Parameters.ContainsKey($name)) { throw "Start-ScannerDiagnostics lacks '$name'." }
+            }
+            Start-ScannerDiagnostics -ResetConfig -OnBehalfOf (Get-LabCredential) -ErrorAction Stop |
+                Out-File -LiteralPath (Join-Path $stateDirectory 'policy-refresh-diagnostics.txt') -Encoding utf8
             break
         }
         if ($WorkerOperation -notin @('Scan', 'Verify')) { throw 'Unsupported worker operation.' }

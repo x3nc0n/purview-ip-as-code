@@ -290,11 +290,28 @@ Describe 'Mocked service reconciliation contracts' {
                 [string]$ParentId, [int]$Priority, [bool]$EncryptionEnabled, [string]$EncryptionProtectionType,
                 [string[]]$EncryptionRightsDefinitions, [Nullable[int]]$EncryptionOfflineAccessDays,
                 [string]$EncryptionContentExpiredOnDateInDaysOrNever, [bool]$EncryptionPromptUser,
-                [bool]$EncryptionDoNotForward, [bool]$EncryptionEncryptOnly
+                [bool]$EncryptionDoNotForward, [bool]$EncryptionEncryptOnly,
+                [string]$Conditions, [bool]$SiteAndGroupProtectionEnabled,
+                [string]$SiteAndGroupProtectionPrivacy, [bool]$SiteAndGroupProtectionAllowAccessToGuestUsers,
+                [string]$SiteExternalSharingControlType
             )
             $item = $global:PurviewFakeState.Labels | Where-Object { [string]$_.Guid -eq $Identity } | Select-Object -First 1
             foreach ($name in @('DisplayName', 'Tooltip', 'ContentType', 'ParentId', 'Priority', 'EncryptionEnabled', 'EncryptionProtectionType', 'EncryptionRightsDefinitions', 'EncryptionOfflineAccessDays', 'EncryptionContentExpiredOnDateInDaysOrNever', 'EncryptionPromptUser', 'EncryptionDoNotForward', 'EncryptionEncryptOnly')) {
                 if ($PSBoundParameters.ContainsKey($name)) { $item.$name = $PSBoundParameters[$name] }
+            }
+            if ($PSBoundParameters.ContainsKey('Conditions')) { $item | Add-Member Conditions @($Conditions) -Force }
+            if ($PSBoundParameters.ContainsKey('SiteAndGroupProtectionEnabled')) {
+                $actions = @(
+                    @{ Type = 'protectgroup'; Settings = @(
+                        @{ Key = 'disabled'; Value = 'false' }
+                        @{ Key = 'privacy'; Value = $SiteAndGroupProtectionPrivacy }
+                        @{ Key = 'allowaccesstoguestusers'; Value = [string]$SiteAndGroupProtectionAllowAccessToGuestUsers }
+                    ) }
+                    @{ Type = 'protectsite'; Settings = @(
+                        @{ Key = 'externalsharingcontroltype'; Value = $SiteExternalSharingControlType }
+                    ) }
+                )
+                $item | Add-Member LabelActions @($actions | ForEach-Object { $_ | ConvertTo-Json -Depth 6 -Compress }) -Force
             }
             [void]$global:PurviewFakeState.Calls.Add([pscustomobject]@{ Command = 'Set-Label'; Identity = $Identity })
             return $item
@@ -303,6 +320,11 @@ Describe 'Mocked service reconciliation contracts' {
             [CmdletBinding()]
             param([string]$Identity)
             return @($global:PurviewFakeState.Packages)
+        }
+        function global:Get-DlpSensitiveInformationType {
+            [CmdletBinding()]
+            param([string]$Identity)
+            return [pscustomobject]@{ Id = $Identity }
         }
         function global:New-DlpSensitiveInformationTypeRulePackage {
             [CmdletBinding()]
@@ -313,7 +335,7 @@ Describe 'Mocked service reconciliation contracts' {
             return $item
         }
         function global:Set-DlpSensitiveInformationTypeRulePackage {
-            [CmdletBinding()]
+            [CmdletBinding(SupportsShouldProcess)]
             param([byte[]]$FileData)
             [void]$global:PurviewFakeState.Calls.Add([pscustomobject]@{ Command = 'Set-DlpSensitiveInformationTypeRulePackage' })
         }
@@ -386,7 +408,7 @@ Describe 'Mocked service reconciliation contracts' {
         }
         $functionNames = @(
             'Connect-IPPSSession', 'Connect-ExchangeOnline', 'Get-OrganizationConfig', 'Get-Label', 'New-Label', 'Set-Label',
-            'Get-DlpSensitiveInformationTypeRulePackage', 'New-DlpSensitiveInformationTypeRulePackage', 'Set-DlpSensitiveInformationTypeRulePackage',
+            'Get-DlpSensitiveInformationType', 'Get-DlpSensitiveInformationTypeRulePackage', 'New-DlpSensitiveInformationTypeRulePackage', 'Set-DlpSensitiveInformationTypeRulePackage',
             'Get-LabelPolicy', 'New-LabelPolicy', 'Get-AutoSensitivityLabelPolicy', 'New-AutoSensitivityLabelPolicy',
             'Set-AutoSensitivityLabelPolicy', 'Get-AutoSensitivityLabelRule', 'New-AutoSensitivityLabelRule', 'Get-Recipient'
         )
