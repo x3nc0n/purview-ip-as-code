@@ -484,10 +484,13 @@ function Assert-DiscoveryContentScan {
         throw 'Scanner runtime did not return one explicit content scan job configuration.'
     }
     $ContentScan = $jobs[0]
-    foreach ($name in @('Enforce', 'LabelFilesByContent', 'RelabelFiles', 'EnforceDefaultLabel')) {
-        if ([string]$ContentScan.$name -ne 'Off') {
+    foreach ($name in @('Enforce', 'RelabelFiles', 'EnforceDefaultLabel')) {
+        if ([string]$ContentScan.$name -notin @('Off', 'False')) {
             throw "Portal content scan job must explicitly set '$name' to Off before bootstrap can start discovery."
         }
+    }
+    if ([string]$ContentScan.LabelFilesByContent -notin @('On', 'True')) {
+        throw 'Portal content scan job must set LabelFilesByContent to On for content inspection; Enforce Off prevents label writes.'
     }
 }
 
@@ -589,7 +592,7 @@ function Invoke-ServiceContextConfiguration {
 
     if ($ConfigurationMode -eq 'Offline') {
         Set-ScannerConfiguration -OnlineConfiguration Off -ErrorAction Stop | Out-Null
-        Set-ScannerContentScan -Enforce Off -DiscoverInformationTypes All -EnableDlp On -LabelFilesByContent Off -RelabelFiles Off -EnforceDefaultLabel Off -ErrorAction Stop | Out-Null
+        Set-ScannerContentScan -Enforce Off -DiscoverInformationTypes All -EnableDlp Off -LabelFilesByContent On -RelabelFiles Off -EnforceDefaultLabel Off -ErrorAction Stop | Out-Null
         $repository = Get-ScannerRepository -ErrorAction Stop | Where-Object { $_.PSObject.Properties.Name -contains 'Path' -and [string]$_.Path -eq $destination }
         if (-not $repository) {
             Add-ScannerRepository -Path $destination -ErrorAction Stop | Out-Null

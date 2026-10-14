@@ -454,7 +454,7 @@ Describe 'Scanner lab safety gates' {
     It 'requires Windows Server Desktop Experience and leaves scanner labeling off' {
         $bootstrap = Get-Content (Join-Path $repositoryRoot 'extensions\scanner\scripts\Invoke-LabBootstrap.ps1') -Raw
         $bootstrap | Should -Match "installationType -ne 'Server'"
-        $bootstrap | Should -Match 'Set-ScannerContentScan -Enforce Off -DiscoverInformationTypes All -EnableDlp On -LabelFilesByContent Off -RelabelFiles Off -EnforceDefaultLabel Off'
+        $bootstrap | Should -Match 'Set-ScannerContentScan -Enforce Off -DiscoverInformationTypes All -EnableDlp Off -LabelFilesByContent On -RelabelFiles Off -EnforceDefaultLabel Off'
         $bootstrap | Should -Match '\$state\.scannerLabelConditionsSupported = \$false'
         $bootstrap | Should -Match '\$state\.readyForEnforcement = \$false'
     }

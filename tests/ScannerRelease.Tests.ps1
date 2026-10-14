@@ -56,12 +56,24 @@ Describe 'Report-backed scanner readiness' {
     }
 
     It 'requires explicit safe portal job switches' {
-        $job = [pscustomobject]@{Enforce = 'Off'; LabelFilesByContent = 'Off'; RelabelFiles = 'Off'; EnforceDefaultLabel = 'Off'}
+        $job = [pscustomobject]@{Enforce = 'Off'; LabelFilesByContent = 'On'; RelabelFiles = 'Off'; EnforceDefaultLabel = 'Off'}
         { Assert-DiscoveryContentScan -ContentScan $job } | Should -Not -Throw
         { Assert-DiscoveryContentScan -ContentScan @($job, 'Repositories:', @()) } | Should -Not -Throw
         $job.Enforce = ''
         { Assert-DiscoveryContentScan -ContentScan $job } | Should -Throw '*Enforce*Off*'
         $job.Enforce = 'On'
+        { Assert-DiscoveryContentScan -ContentScan $job } | Should -Throw '*Enforce*Off*'
+    }
+
+    It 'accepts runtime boolean switches but rejects disabled content inspection and unspecified enforcement' {
+        $job = [pscustomobject]@{Enforce = $false; LabelFilesByContent = $true; RelabelFiles = $false; EnforceDefaultLabel = $false}
+        { Assert-DiscoveryContentScan -ContentScan $job } | Should -Not -Throw
+        $job.LabelFilesByContent = $false
+        { Assert-DiscoveryContentScan -ContentScan $job } | Should -Throw '*content inspection*'
+        $job.LabelFilesByContent = $null
+        { Assert-DiscoveryContentScan -ContentScan $job } | Should -Throw '*content inspection*'
+        $job.LabelFilesByContent = $true
+        $job.Enforce = $null
         { Assert-DiscoveryContentScan -ContentScan $job } | Should -Throw '*Enforce*Off*'
     }
 }

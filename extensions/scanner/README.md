@@ -1,6 +1,6 @@
 # Private scanner demo (beta)
 
-This add-on deploys a private Windows scanner VM, SQL Express, Key Vault, managed identity, and an Azure Files account/share. **The beta scans a local synthetic repository, not Azure Files.** Shared-key storage access is disabled; configuring identity-based SMB is outside this add-on. No production content or enforcement is supported.
+This add-on deploys a private Windows scanner VM, SQL Express, Key Vault, managed identity, and an Azure Files account/share. **Published beta.1 scans local synthetic fixtures, not Azure Files.** Current source also includes an optional IaaS AD DS lab workflow for private Azure Files discovery; it is separate from the original bootstrap and does not change immutable beta assets. Shared-key storage access stays disabled. No production content or enforcement is supported.
 
 ## Create the portal cluster and job first
 
@@ -62,8 +62,8 @@ Online bootstrap requires an assigned discovery-only portal job and the exact re
 ```text
 Enforce Off
 DiscoverInformationTypes All
-EnableDlp On
-LabelFilesByContent Off
+EnableDlp Off
+LabelFilesByContent On
 RelabelFiles Off
 EnforceDefaultLabel Off
 ```
@@ -170,6 +170,110 @@ new tag.
 For future domain-controller use, scheduled deallocation makes AD/DNS unavailable
 outside work hours. Starting scanner and DC VMs together does not guarantee AD/DNS
 is ready first; sequence startup and verify service recovery when implementing AD.
+
+## Optional IaaS AD DS and Azure Files discovery
+
+`scripts\Invoke-ScannerAdLab.ps1` runs approved guest stages in elevated
+Windows PowerShell 5.1, normally through Azure VM Run Command. This is a
+single-controller **lab**, not a production directory or high-availability design.
+The default domain is `corp.tiny.local` / `CORP`; neither Entra Connect nor Cloud
+Sync is installed. `CORP\PurviewScannerSvc` is an AD-local identity with a separate
+password, not a synchronized copy of the delegated Microsoft 365 user.
+
+Review the operations before running each stage; promotion and domain join require
+reboots. The tiny VM template alone does not perform them:
+
+1. Deploy `infra\ad-data-disk.bicep` incrementally after validation/what-if, then attach the dedicated 32 GiB disk at LUN 0 with **host caching None**. `Promote` accepts only that disk and places NTDS/logs/SYSVOL on `F:`. Do not reuse a disk with other data.
+2. Run `Prepare` on both VMs. It returns public encryption certificates, never private keys. Run `Promote` on the controller, reboot, then `Directory` with the scanner's public certificate. The latter configures Azure DNS forwarding, creates the non-administrative scanner identity, and returns its credential encrypted for the scanner.
+3. Set only the scanner NIC's DNS to the controller's private IP, reboot, and run `Join` with a CMS-encrypted domain-administrator credential addressed to the scanner certificate. Reboot and confirm the secure channel. Domain administrators must not be used as the scanner service account.
+4. Generate a storage **Kerberos** key and deliver it in a CMS envelope to `StorageIdentity` on the controller. This creates the `azfilesdemo` AD computer/SPN with AES-256. Apply its returned domain GUID/SIDs and computer-account metadata to Azure Files AD DS authentication. Keep public networking/shared-key data access disabled and the default share permission `StorageFileDataSmbShareReader`. This Reader default permits AD-only identities; NTFS ACLs restrict which identities actually read the files.
+5. Use the operator helper below for ACL bootstrap, then `Migrate` with the encrypted service envelope. It preserves the cluster/database, changes the scanner service account, backs up imported configuration, and explicitly replaces the **local** job with offline/manual discovery of this UNC. This does not delete a portal job or any files. `Authenticate` uses the selected VM managed identity only to retrieve the approved app secret from Key Vault, then runs `Set-Authentication -OnBehalfOf` in a temporary elevated worker under the qualified domain account. This creates the correct domain profile and configures authentication for the service logon, not just the interactive worker. Use the dedicated scanner app registration, not an Exchange administration app.
+6. Run `StartDiscovery`. Its service-account worker checks every fixture ACL, reads every file, verifies write denial, starts the actual scanner service, and requires a completed, fresh summary plus detailed reports covering every UNC file with zero failures. An already active cycle is rejected; only explicitly supplied `StopExistingScan=On` cancels it before a reset scan. Cancellation may take several configuration-poll cycles. Temporary local administrator membership used for scanner management is removed in `finally`; it is not an Azure Files administrative grant.
+
+Use the normal file hostname, not its private IP:
+
+```text
+\\stscannerdemod12f.file.core.windows.net\scanner-demo\fixtures
+```
+
+The `Az-Demo` portal cluster must already exist. The approved offline lab job is
+local configuration; it does not populate an empty online portal job. To return
+to online configuration, first assign a discovery-only portal job and this UNC
+repository, then deliberately switch modes. Content inspection
+(`LabelFilesByContent On`) is enabled, but enforcement, relabeling and default
+label enforcement remain Off. `Enforce Off` prevents label writes. DLP evaluation
+remains Off unless an on-premises scanner DLP policy is configured.
+
+The earlier General-only lab report was not a content-detection success:
+`LabelFilesByContent Off` disabled inspection. Use `DiscoverInformationTypes All`
+with content inspection On, then inspect the detailed report's `Information Type
+Name` and `Condition Name` columns. A proposed `Applied Label` in a discovery
+report is not a label written to disk. Cloud Exchange/SharePoint/OneDrive
+auto-label policies do not supply scanner label conditions; those conditions
+must be configured and independently validated before enforcement approval.
+
+### Bootstrap restrictive NTFS permissions without storage keys
+
+An SMB Elevated Contributor share permission does not override an existing NTFS
+DACL. The operator helper uses private **FilesREST OAuth backup semantics** with
+a temporary `Storage File Data Privileged Contributor` grant to the scanner VM's
+selected managed identity. The grant uses
+`.../fileServices/default/fileshares/<share>`: `fileshares`, **not** the ARM
+management resource's `shares` spelling. See
+[OAuth authorization](https://learn.microsoft.com/azure/storage/files/authorize-oauth-rest).
+
+```powershell
+.\extensions\scanner\scripts\Set-ScannerAdLabFilePermissions.ps1 `
+    -SubscriptionId '<subscription-id>' `
+    -StorageResourceGroup '<existing-demo-storage-resource-group>' `
+    -ScannerResourceGroup '<scanner-resource-group>' `
+    -ScannerVmName '<domain-joined-scanner-vm>' `
+    -StorageAccountName 'stscannerdemod12f' -ShareName 'scanner-demo' `
+    -IdentityClientId '<scanner-uami-client-id>' `
+    -IdentityPrincipalId '<scanner-uami-object-id>'
+```
+
+The helper preserves existing grants and removes only its new assignment in
+`finally`, including on guest failure. RBAC propagation can delay authorization;
+failure is surfaced, not accepted as successful setup. The guest backs up original
+SDDL once, retains a validated path inventory for retries, and applies protected
+ACLs to the share root and every fixture: scanner Read/Execute, Domain Admins and
+SYSTEM Full Control, no broad Users/Authenticated Users grant. It preserves file
+attributes/timestamps and does not enable public networking or shared-key access.
+Do not leave temporary privileged roles behind after an interrupted operation.
+
+### Credentials, evidence, and recovery
+
+Restricted state is under `C:\ProgramData\PurviewIPAsCode-AdLab`, with access only
+for SYSTEM/local administrators. Transported credentials are CMS encrypted to
+nonexportable receiver certificates; stored service/DSRM passwords are
+machine-DPAPI protected. Do not print/export credentials, place them in command
+lines, or copy token caches between Windows profiles. Keep an approved recovery
+backup of the controller and its AD data disk: loss of the VM/DPAPI context can
+make these lab secrets unrecoverable. No backup service is installed by this
+workflow.
+
+`scan-result.json` records the exact UNC, service identity, fresh reports, file
+coverage and read-only checks. Reports are in the domain service account's
+`%LOCALAPPDATA%\Microsoft\MSIP\Scanner\Reports`. `Stage=Status` surfaces the worker
+log/result. Successful discovery is **not** validation of expected sensitive
+information types; compare detections with the fixture manifest separately.
+Migration invalidates the previous bootstrap `readiness.json` discovery result.
+Only successful report-backed discovery updates it with the new domain account,
+UNC, report paths and read-only checks. `PersistDiscovery` can repeat that
+publication from protected evidence after checking the current service identity and
+report freshness; it does not run a scan. `VerifyDiscovery` repeats service-account
+ACL/read/no-write and completed-report checks against the recorded scan request
+without triggering another scan. Readiness records the completed scan outcome,
+not a guessed current cluster status. An old local-repository report must not
+be treated as proof of a new UNC scan.
+
+The workday schedule still shuts down both lab VMs; DNS/domain services are
+unavailable while the controller is deallocated. After startup, verify AD DNS and
+the scanner secure channel before restarting `MIPScanner` and requesting a scan.
+Do not restore broad share write access merely to work around startup/authentication
+failures. Retain the old local service identity and database until recovery is
+reviewed.
 
 ## Network, recovery and teardown
 
