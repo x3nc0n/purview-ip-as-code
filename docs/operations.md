@@ -1,5 +1,39 @@
 # Operations and recovery
 
+## Tenant-wide Microsoft 365 discovery simulations
+
+The `diax18655663` lab overlay explicitly uses `All` for SharePoint, OneDrive and
+Exchange locations. This broadens discovery, not label enforcement: the four
+BCSI/PII policies remain `TestWithoutNotifications`. Teams channel documents are
+covered through their backing SharePoint sites, including separate channel sites;
+Teams chat messages are not covered by these file-labeling policies.
+
+After connecting to Exchange Online and Security & Compliance PowerShell in the
+configured tenant, use the inventory-owned simulation restart helper:
+
+```powershell
+.\scripts\Start-CloudDiscoverySimulation.ps1 `
+  -EnvironmentPath config\environments\diax18655663.json `
+  -BackupPath .purview-state\cloud-discovery-before.xml
+# Review the plan, then repeat with -Apply. Use a fresh backup path for each run.
+```
+
+The helper verifies tenant identity, policy GUIDs/names and simulation-only mode,
+rejects scheduled automatic enforcement and file-location exclusions, backs up
+live policies, reconciles configured workloads to `All`, reads back scopes and
+requests fresh simulations with `StartSimulation=$true`. A successful request
+is not proof of completed scanning or matching documents. On a partial failure,
+inspect the backup and live policies before retrying with a new backup path.
+
+In Purview, open **Information Protection > Policies > Auto-labeling policies**,
+select a `Purview IP as code` policy and inspect its simulation results and
+matched items. Allow service-side indexing and simulation processing; results
+are asynchronous and can take days. Content explorer classification can lag
+separately. Simulation does not apply labels or guarantee immediate Activity
+explorer events. Exchange rules evaluate email in transit; restarting a
+simulation is not an on-demand historical scan of every mailbox. There is no
+single universal scan covering all Microsoft 365 asset types. and recovery
+
 ## Local checks
 
 Run the commands in the root README. `Test-Configuration.ps1` validates contracts; `Build-RulePackage.ps1` compiles the custom SIT XML; `Invoke-DetectionTests.ps1` evaluates only the local fixture expectations; and `Get-DeploymentPlan.ps1` renders intended operations. CI does not authenticate to Microsoft 365 or Azure.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Expands the test tenant's cloud discovery scope to all SharePoint and OneDrive locations, including Teams channel files. Adds a tenant/ownership-checked, backup-first simulation restart script that refuses active policies, scheduled automatic enforcement and file-location exclusions. Exchange remains mail-in-transit evaluation, not a historical mailbox scan.
+
 - Fixes PII demo fixtures: replaces the natively nonmatching `123-45-6789`, supplies nearby SSN keywords and distinct synthetic values because Purview deduplicates identical values. Native service tests confirm confidence-85 counts at 1/199/200/250 without weakening label thresholds. PDF generation now retains all records across pages instead of truncating after 48 lines.
 - The online Azure Files scan completed 2026-10-15 at 14:38:27 UTC with 29 files, 12 actual BES labels/encryptions and zero failures. Persisted metadata confirmed all 12 protections, all nine BCSI detector/format positives and four negative controls. That scan preceded the PII fixture correction and does not validate corrected PII labeling.
 - After resetting from the corrected commit, the online scan ending 2026-10-15 at 15:51:54 UTC labeled/encrypted 23 of 29 files: 12 BES, five Confidential/Internal Only and six Highly Confidential/Internal Only, with six no-match skips and zero failures. Persisted metadata verifies all eleven PII outcomes, including the 200-record PDF. The reset now parses raw FilesREST XML bytes, avoiding Windows PowerShell HTTP text-decoding/BOM errors.

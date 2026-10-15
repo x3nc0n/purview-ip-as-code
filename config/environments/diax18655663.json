@@ -48,10 +48,10 @@
   },
   "scopes": {
     "sharePointLocations": [
-      "https://diax18655663.sharepoint.com"
+      "All"
     ],
     "oneDriveLocations": [
-      "https://diax18655663-my.sharepoint.com/personal/admin_diax18655663_onmicrosoft_com"
+      "All"
     ],
     "exchangeLocations": [
       "All"
