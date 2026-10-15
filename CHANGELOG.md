@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Enabled all four tenant-wide lab auto-label policies on explicit operator request on 2026-10-15, retaining `OverwriteLabel=False`. All 15 rules matched source and enabled modes were read back; distribution and actual cloud file-label writes remain asynchronous and unverified. Stable policy names still contain `(simulation)`; their live Mode is authoritative.
+
 - Expands the test tenant's cloud discovery scope to all SharePoint and OneDrive locations, including Teams channel files. Adds a tenant/ownership-checked, backup-first simulation restart script that refuses active policies, scheduled automatic enforcement and file-location exclusions. Exchange remains mail-in-transit evaluation, not a historical mailbox scan.
 
 - Fixes PII demo fixtures: replaces the natively nonmatching `123-45-6789`, supplies nearby SSN keywords and distinct synthetic values because Purview deduplicates identical values. Native service tests confirm confidence-85 counts at 1/199/200/250 without weakening label thresholds. PDF generation now retains all records across pages instead of truncating after 48 lines.

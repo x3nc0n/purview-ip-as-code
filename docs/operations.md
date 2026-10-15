@@ -3,8 +3,7 @@
 ## Tenant-wide Microsoft 365 discovery simulations
 
 The `diax18655663` lab overlay explicitly uses `All` for SharePoint, OneDrive and
-Exchange locations. This broadens discovery, not label enforcement: the four
-BCSI/PII policies remain `TestWithoutNotifications`. Teams channel documents are
+Exchange locations. The scope setting alone does not enable enforcement. Teams channel documents are
 covered through their backing SharePoint sites, including separate channel sites;
 Teams chat messages are not covered by these file-labeling policies.
 
@@ -33,6 +32,30 @@ separately. Simulation does not apply labels or guarantee immediate Activity
 explorer events. Exchange rules evaluate email in transit; restarting a
 simulation is not an on-demand historical scan of every mailbox. There is no
 single universal scan covering all Microsoft 365 asset types. and recovery
+
+### Lab enforcement enabled on 2026-10-15
+
+At the operator's explicit request to apply labels immediately, all four
+inventory-owned policies were switched to `Mode=Enable`. Read-back confirmed
+`OverwriteLabel=False` and tenant-wide locations for each configured workload;
+all 15 managed rules matched source before completing activation. Policy names
+still contain `(simulation)` for stable ownership matching: inspect **Mode**,
+not the display name, to determine whether enforcement is active.
+
+This was an explicitly authorized lab activation, not approval of completed
+simulation results. Simulation completion and runtime manual-label preservation
+were not attested or fabricated. The normal approval-record activation helper
+and its safeguards remain unchanged. The private inventory now records `Enable`
+so subsequent reconciliation preserves enforcement. The simulation-restart
+helper intentionally refuses these active policies.
+
+BCSI matches target Highly Confidential/BES; 1-199 SSN matches target
+Confidential/Internal Only; 200+ SSN file matches target Highly
+Confidential/Internal Only. Exchange 200+ retains Recipients Only / Do Not
+Forward. Matching files are processed asynchronously after policy distribution;
+activation read-back is not proof that the newly uploaded files already have
+persisted labels. Distribution was still Pending at activation. Benign no-match
+files should remain unlabeled. No blanket label was applied to the uploaded batch. and recovery
 
 ## Local checks
 
