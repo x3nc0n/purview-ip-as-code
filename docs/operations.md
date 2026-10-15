@@ -185,6 +185,15 @@ These values are invented and not linked to people; plausible SSNs cannot be
 guaranteed never issued. Local tests check distinct counts/context and PDF
 content, but native file extraction and actual tiered labels must still be
 verified after resetting the share from the corrected commit and rescanning.
+The lab did so on 2026-10-15: scan `55d163ef-5120-4c01-8ec2-f8666918c06d`
+ended at 15:51:54 UTC with 29 files, **23 labels and encryptions**, zero failures
+and six no-match skips. The breakdown was 12 BES, five Confidential / Internal
+Only and six Highly Confidential / Internal Only. Persisted file metadata
+verified all eleven PII outcomes, including the 1- and 200-record DOCX/PDFs;
+BCSI positives and negative controls still passed.
+Use `Test-ScannerLabelWrites.ps1` with both `-ConfidentialLabelId` and
+`-HighlyConfidentialLabelId` (the inventory's Internal Only GUIDs) to repeat
+these assertions; passing only `-BesLabelId` checks BCSI alone.
 The Exchange fixture's service-policy expectation is Recipients Only; when
 scanned as a file, the 200+ SSN condition instead selects Internal Only.
 

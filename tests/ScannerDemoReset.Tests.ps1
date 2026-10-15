@@ -33,7 +33,7 @@ Describe 'Repeatable private scanner demo reset' {
         'old-enforcement' | Set-Content (Join-Path $env:ProgramData 'PurviewIPAsCode-AdLab\enforcement-result.json')
         $global:DemoResetFakeState = @{
             Files = @{ 'old-labeled.docx' = [byte[]](1, 2, 3); 'old-protected.pfile' = [byte[]](4, 5) }
-            HasSubdirectory = $false; FailUpload = $false; GuestScriptPath = $null
+            HasSubdirectory = $false; FailUpload = $false; GuestScriptPath = $null; ListingEncoding = 'Text'
         }
         Mock Start-Sleep {}
         Mock az {
@@ -70,7 +70,16 @@ Describe 'Repeatable private scanner demo reset' {
             if ($Uri -match '\?restype=directory&comp=list') {
                 $entries = @($global:DemoResetFakeState.Files.Keys | ForEach-Object { "<File><Name>$_</Name></File>" }) -join ''
                 if ($global:DemoResetFakeState.HasSubdirectory) { $entries += '<Directory><Name>do-not-delete</Name></Directory>' }
-                return [pscustomobject]@{ Content = "<EnumerationResults><Entries>$entries</Entries><NextMarker /></EnumerationResults>" }
+                $xml = "<EnumerationResults><Entries>$entries</Entries><NextMarker /></EnumerationResults>"
+                $content = switch ($global:DemoResetFakeState.ListingEncoding) {
+                    'Bom' { [string][char]0xfeff + $xml }
+                    'Bytes' { ,([Text.Encoding]::UTF8.GetPreamble() + [Text.Encoding]::UTF8.GetBytes($xml)) }
+                    default { $xml }
+                }
+                $bytes = if ($global:DemoResetFakeState.ListingEncoding -eq 'Text') {
+                    [Text.Encoding]::UTF8.GetBytes($xml)
+                } else { [byte[]]([Text.Encoding]::UTF8.GetPreamble() + [Text.Encoding]::UTF8.GetBytes($xml)) }
+                return [pscustomobject]@{ Content = $content; RawContentStream = [IO.MemoryStream]::new([byte[]]$bytes, $false) }
             }
             if ($Uri -notmatch '^https://stscannerdemod12f\.file\.core\.windows\.net/scanner-demo/fixtures/([^?]+)(\?comp=range)?$') {
                 throw "Out-of-scope REST request: $Uri"
@@ -147,6 +156,20 @@ Describe 'Repeatable private scanner demo reset' {
         { & $worker @arguments -Confirm:$false } | Should -Throw '*subdirectory*'
         Should -Invoke Invoke-WebRequest -ParameterFilter { $Method -eq 'Delete' } -Times 0 -Exactly
         Should -Invoke Stop-Service -Times 0 -Exactly
+    }
+
+    It 'accepts a UTF8 BOM directory listing before restoring files' {
+        $global:DemoResetFakeState.ListingEncoding = 'Bom'
+        $result = & $worker @arguments -Confirm:$false | ConvertFrom-Json
+        $result.ResetComplete | Should -BeTrue
+        $result.VerifiedFiles | Should -Be 29
+    }
+
+    It 'accepts a byte-array directory listing with a UTF8 BOM' {
+        $global:DemoResetFakeState.ListingEncoding = 'Bytes'
+        $result = & $worker @arguments -Confirm:$false | ConvertFrom-Json
+        $result.ResetComplete | Should -BeTrue
+        $result.VerifiedFiles | Should -Be 29
     }
 
     It 'refuses an active scan before touching the share' {

@@ -1,6 +1,8 @@
 BeforeAll {
     $verifier = Join-Path $PSScriptRoot '..\extensions\scanner\scripts\Test-ScannerLabelWrites.ps1'
     $besId = '2631698b-e361-4800-b826-224d5c297cce'
+    $lowId = '00000000-0000-0000-0000-000000000003'
+    $highId = '00000000-0000-0000-0000-000000000004'
     $publishing = Join-Path $PSScriptRoot '..\extensions\scanner\scripts\Set-ScannerPublishingSettings.ps1'
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($publishing, [ref]$null, [ref]$null)
     $parser = $ast.Find({
@@ -51,12 +53,24 @@ Describe 'Persisted scanner label verification' {
                 MainLabelId=[guid]::Empty; SubLabelId=[guid]::Empty
             }
         }
+        foreach ($base in 'pii-spo-1','pii-spo-198','pii-spo-199','pii-spo-200','pii-spo-201','pii-spo-250','pii-exchange-200') {
+            $id = if ($base -in @('pii-spo-1','pii-spo-198','pii-spo-199')) { $lowId } else { $highId }
+            $formats = if ($base -in @('pii-spo-1','pii-spo-200')) { @('txt','docx','pdf') } else { @('txt') }
+            foreach ($extension in $formats) {
+                $actual = if ($extension -eq 'txt') { "$base.ptxt" } else { "$base.$extension" }
+                $rows += [pscustomobject]@{ 'File Name'="$base.$extension"; Status='Success'; 'Applied Label ID'=$id }
+                $statuses += [pscustomobject]@{
+                    FileName=$actual; IsLabeled=$true; IsRMSProtected=$true
+                    MainLabelId='00000000-0000-0000-0000-000000000001'; SubLabelId=$id
+                }
+            }
+        }
         foreach ($row in $rows) {
             if ($row.PSObject.Properties.Name -notcontains 'Comment') { $row | Add-Member -NotePropertyName Comment -NotePropertyValue '' }
         }
         $result = @{
             EnforcementEnabled=$true; ScannerWriteDenied=$false; RestrictiveAclsValidated=$true
-            FixtureCount=13; DetailedReportPath=$reportPath; FileStatusPath=$statusPath
+            FixtureCount=24; DetailedReportPath=$reportPath; FileStatusPath=$statusPath
             ScanEndedAtUtc='2026-10-14T23:09:26Z'; Repository='\\demo\fixtures'
         }
         $rows | Export-Csv -LiteralPath $reportPath -NoTypeInformation
@@ -85,7 +99,7 @@ Describe 'Persisted scanner label verification' {
     }
 
     It 'rejects missing persisted metadata rather than counting successful report rows' {
-        $statuses[1..12] | ConvertTo-Json | Set-Content -LiteralPath $statusPath
+        $statuses[1..23] | ConvertTo-Json | Set-Content -LiteralPath $statusPath
         { & $verifier -ScanResultPath $resultPath -BesLabelId $besId } | Should -Throw '*Missing unique*'
     }
 
@@ -111,5 +125,18 @@ Describe 'Persisted scanner label verification' {
         $statuses[9].SubLabelId = $besId
         $statuses | ConvertTo-Json | Set-Content -LiteralPath $statusPath
         { & $verifier -ScanResultPath $resultPath -BesLabelId $besId } | Should -Throw '*negative control*'
+    }
+
+    It 'verifies all eleven PII persisted file tiers, including the 200-record PDF' {
+        $evidence = (& $verifier -ScanResultPath $resultPath -BesLabelId $besId -ConfidentialLabelId $lowId -HighlyConfidentialLabelId $highId) | ConvertFrom-Json
+        $evidence.PiiWritesValidated | Should -Be 11
+        @($evidence.PiiObservations | Where-Object LabelId -eq $lowId).Count | Should -Be 5
+        @($evidence.PiiObservations | Where-Object LabelId -eq $highId).Count | Should -Be 6
+    }
+
+    It 'rejects an incorrect native 200-record PDF label rather than trusting local counts' {
+        ($statuses | Where-Object FileName -eq 'pii-spo-200.pdf').SubLabelId = $lowId
+        $statuses | ConvertTo-Json | Set-Content -LiteralPath $statusPath
+        { & $verifier -ScanResultPath $resultPath -BesLabelId $besId -ConfidentialLabelId $lowId -HighlyConfidentialLabelId $highId } | Should -Throw '*PII fixture*'
     }
 }

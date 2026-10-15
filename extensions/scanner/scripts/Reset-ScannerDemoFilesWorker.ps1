@@ -64,7 +64,10 @@ function Get-DemoDirectoryEntry {
         $headers['x-ms-date'] = [datetime]::UtcNow.ToString('R')
         $uri = "${baseUri}?restype=directory&comp=list"
         if ($marker) { $uri += "&marker=$([uri]::EscapeDataString($marker))" }
-        [xml]$listing = (Invoke-WebRequest -Uri $uri -Headers $headers -UseBasicParsing).Content
+        $response = Invoke-WebRequest -Uri $uri -Headers $headers -UseBasicParsing
+        $listing = [xml]::new()
+        $response.RawContentStream.Position = 0
+        $listing.Load($response.RawContentStream)
         if ($listing.SelectNodes('/EnumerationResults/Entries/Directory').Count) {
             throw 'Unexpected subdirectory in fixtures; refusing recursive deletion.'
         }
