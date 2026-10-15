@@ -13,7 +13,14 @@ from xml.sax.saxutils import escape
 ROOT = Path(__file__).resolve().parents[2]
 CONTENT = ROOT / "demo" / "content" / "generated"
 MANIFEST = ROOT / "demo" / "manifests" / "fixtures.json"
-SSN = "123-45-6789"
+SSN = "321-54-1000"
+
+
+def ssn_records(count: int) -> str:
+    return "\n".join(
+        f"Synthetic Social Security Number SSN: 321-54-{1000 + index:04d}"
+        for index in range(count)
+    )
 
 
 def write_docx(destination: Path, body: str) -> None:
@@ -43,21 +50,27 @@ def write_docx(destination: Path, body: str) -> None:
 
 def write_pdf(destination: Path, body: str) -> None:
     lines = [re.sub(r"[^\x20-\x7e]", "?", line) for line in body.splitlines()]
-    commands = ["BT", "/F1 10 Tf", "50 760 Td", "14 TL"]
-    for index, line in enumerate(lines[:48]):
-        escaped = line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-        if index:
-            commands.append("T*")
-        commands.append(f"({escaped}) Tj")
-    commands.append("ET")
-    stream = "\n".join(commands).encode("ascii")
+    pages = [lines[index:index + 48] for index in range(0, len(lines), 48)] or [[]]
+    page_ids = [4 + 2 * index for index in range(len(pages))]
+    kids = " ".join(f"{number} 0 R" for number in page_ids)
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        f"<< /Type /Pages /Kids [{kids}] /Count {len(pages)} >>".encode("ascii"),
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
     ]
+    for page_id, page in zip(page_ids, pages):
+        commands = ["BT", "/F1 10 Tf", "50 760 Td", "14 TL"]
+        for index, line in enumerate(page):
+            escaped = line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+            if index:
+                commands.append("T*")
+            commands.append(f"({escaped}) Tj")
+        commands.append("ET")
+        stream = "\n".join(commands).encode("ascii")
+        objects.extend([
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents {page_id + 1} 0 R >>".encode("ascii"),
+            b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+        ])
     output = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
     offsets = [0]
     for number, obj in enumerate(objects, start=1):
@@ -95,7 +108,7 @@ def main() -> None:
             "id": fixture_id,
             "extractedTextPath": f"demo/content/generated/{text_name}",
             "expectedDetectionType": detector or ("us-ssn" if ssn_occurrences else None),
-            "expectedConfidence": 85 if detector else None,
+            "expectedConfidence": 85 if detector or ssn_occurrences else None,
             "expectedSsnOccurrences": ssn_occurrences,
             "expectedLabel": expected_label,
             "workload": workload,
@@ -169,8 +182,8 @@ def main() -> None:
 
     for count in (0, 1, 198, 199, 200, 201, 250):
         body = (
-            "Synthetic identifier count demonstration. Repeated values are deliberate and do not represent unique people.\n"
-            + "\n".join([SSN] * count)
+            "Synthetic identifier count demonstration. Invented values do not represent people.\n"
+            + ssn_records(count)
             + ("\nInvalid negative-control value: 000-00-0000." if count == 0 else "")
         )
         label = "none" if count == 0 else (
@@ -186,7 +199,7 @@ def main() -> None:
 
     add(
         "pii-exchange-200",
-        "\n".join([SSN] * 200),
+        ssn_records(200),
         "highly-confidential-recipients",
         ssn_occurrences=200,
         workload="Exchange",
@@ -195,7 +208,7 @@ def main() -> None:
         "mixed-pii-199-bcsi",
         "BCSI: INTERNAL DEMO DESIGNATION\n"
         "Synthetic training item combines independent conditions.\n"
-        + "\n".join([SSN] * 199),
+        + ssn_records(199),
         "highly-confidential-bes",
         ssn_occurrences=199,
         detector="bcsi-explicit-designation",
@@ -204,22 +217,22 @@ def main() -> None:
         "mixed-pii-200-bcsi",
         "BCSI: INTERNAL DEMO DESIGNATION\n"
         "Synthetic training item combines independent conditions.\n"
-        + "\n".join([SSN] * 200),
+        + ssn_records(200),
         "highly-confidential-bes",
         ssn_occurrences=200,
         detector="bcsi-explicit-designation",
     )
 
     manifest = {
-        "generatorVersion": "1.0.0",
+        "generatorVersion": "1.0.1",
         "syntheticOnly": True,
         "identifierFixture": SSN,
         "identifierWarning": (
-            "This conventional example is synthetic and is not associated with a person. "
+            "These generated examples are synthetic and are not associated with people. "
             "A plausible SSN-format value cannot be guaranteed never to have been issued. "
             "Live detector results must be observed in the target tenant."
         ),
-        "countSemantics": "Occurrences in one item; repeated values are not unique people.",
+        "countSemantics": "Distinct synthetic SSN values per item, each with nearby SSN keywords; native Purview counts deduplicate repeated identical values.",
         "fixtures": fixtures,
     }
     MANIFEST.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

@@ -5,7 +5,7 @@ BeforeAll {
     $errors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$errors)
     if ($errors) { throw 'AD lab script failed to parse.' }
-    foreach ($name in 'ConvertTo-LabSecureString', 'Get-LabRandomPassword', 'Assert-DiscoveryJob') {
+    foreach ($name in 'ConvertTo-LabSecureString', 'Get-LabRandomPassword', 'Assert-DiscoveryJob', 'Assert-LabOnlineJob') {
         $definition = $ast.Find({
             param($node)
             $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
@@ -13,6 +13,8 @@ BeforeAll {
         . ([scriptblock]::Create($definition.Extent.Text))
     }
     function Get-ScannerContentScan { }
+    function Get-ScannerConfiguration { }
+    function Get-ScannerRepository { }
 }
 
 Describe 'AD lab security and scan contract' {
@@ -103,5 +105,43 @@ Describe 'AD lab security and scan contract' {
         $helper | Should -Match '--include-inherited'
         $helper | Should -Match '(?s)finally \{.*if \(\$createdAssignment\).*role assignment delete'
         $helper | Should -Match 'FilesREST ACL guest failure'
+        $helper | Should -Match 'dedicated single-share demo account'
+        $helper | Should -Match 'StorageFileDataSmbShareContributor'
+    }
+
+    It 'validates effective online repository settings rather than null portal job defaults' {
+        $ClusterName = 'Az-Demo'
+        $repositoryPath = '\\demo.file.core.windows.net\scanner-demo\fixtures'
+        Mock Get-ScannerConfiguration { [pscustomobject]@{ Cluster='Az-Demo'; OnlineConfiguration='On' } }
+        Mock Get-ScannerContentScan {
+            [pscustomobject]@{ Schedule='Manual'; Enforce=$null; RecommendedAsAutomatic=$false }
+        }
+        Mock Get-ScannerRepository {
+            [pscustomobject]@{
+                Path='\\demo.file.core.windows.net\scanner-demo\fixtures'
+                Enforce='On'; LabelFilesByContent='On'; RelabelFiles='Off'; AllowLabelDowngrade='Off'
+                EnforceDefaultLabel='Off'; EnableDlp='Off'; DefaultLabelType='None'
+            }
+        }
+        { Assert-LabOnlineJob } | Should -Not -Throw
+        Mock Get-ScannerConfiguration { [pscustomobject]@{ Cluster='Az-Demo'; OnlineConfiguration='Off' } }
+        { Assert-LabOnlineJob } | Should -Throw '*online configuration*'
+    }
+
+    It 'rejects broader repositories and relabeling in the online enforcement gate' {
+        $ClusterName = 'Az-Demo'
+        $repositoryPath = '\\demo.file.core.windows.net\scanner-demo\fixtures'
+        Mock Get-ScannerConfiguration { [pscustomobject]@{ Cluster='Az-Demo'; OnlineConfiguration='On' } }
+        Mock Get-ScannerContentScan { [pscustomobject]@{ Schedule='Manual'; Enforce=$null; RecommendedAsAutomatic=$false } }
+        Mock Get-ScannerRepository { [pscustomobject]@{ Path='\\demo.file.core.windows.net\scanner-demo' } }
+        { Assert-LabOnlineJob } | Should -Throw '*exact approved fixtures UNC*'
+        Mock Get-ScannerRepository {
+            [pscustomobject]@{
+                Path='\\demo.file.core.windows.net\scanner-demo\fixtures'
+                Enforce='On'; LabelFilesByContent='On'; RelabelFiles='On'; AllowLabelDowngrade='Off'
+                EnforceDefaultLabel='Off'; EnableDlp='Off'; DefaultLabelType='None'
+            }
+        }
+        { Assert-LabOnlineJob } | Should -Throw '*RelabelFiles Off*'
     }
 }

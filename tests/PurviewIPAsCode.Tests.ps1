@@ -483,7 +483,10 @@ Describe 'Scanner lab safety gates' {
 
     It 'does not allow approval alone to enable scanner protection' {
         $activation = Get-Content (Join-Path $repositoryRoot 'extensions\scanner\scripts\Enable-ScannerProtection.ps1') -Raw
-        $activation | Should -Match 'if \(-not \$readiness\.scannerLabelConditionsSupported\)'
+        $activation | Should -Match 'BcsiDetectionsValidated -ne \$true'
+        $activation | Should -Match 'BcsiPositiveCount -ne 9'
+        $activation | Should -Match '\$approval\.repository'
+        $activation | Should -Match '\$Apply -and \$PSCmdlet.ShouldProcess'
         $activation | Should -Match 'manual-label preservation'
     }
 }

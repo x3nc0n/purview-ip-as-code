@@ -1,2 +1,2 @@
-Synthetic identifier count demonstration. Repeated values are deliberate and do not represent unique people.
-123-45-6789
+Synthetic identifier count demonstration. Invented values do not represent people.
+Synthetic Social Security Number SSN: 321-54-1000

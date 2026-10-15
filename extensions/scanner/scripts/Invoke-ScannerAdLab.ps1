@@ -1,7 +1,7 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('Prepare', 'Promote', 'Directory', 'StorageIdentity', 'Join', 'FilePermissions', 'Migrate', 'Authenticate', 'RefreshPolicy', 'StartDiscovery', 'VerifyDiscovery', 'PersistDiscovery', 'Status', 'Worker')]
+    [ValidateSet('Prepare', 'Promote', 'Directory', 'StorageIdentity', 'Join', 'FilePermissions', 'Migrate', 'Online', 'Authenticate', 'RefreshPolicy', 'StartDiscovery', 'StartEnforcement', 'VerifyEnforcement', 'VerifyDiscovery', 'PersistDiscovery', 'Status', 'Worker')]
     [string]$Stage,
     [ValidatePattern('^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+$')][string]$DomainName = 'corp.tiny.local',
     [ValidatePattern('^[a-zA-Z0-9-]{1,15}$')][string]$NetBiosName = 'CORP',
@@ -16,7 +16,8 @@ param(
     [string]$DelegatedUser,
     [string]$VaultUri,
     [string]$IdentityClientId,
-    [ValidateSet('On', 'Off')][string]$StopExistingScan = 'Off'
+    [ValidateSet('On', 'Off')][string]$StopExistingScan = 'Off',
+    [ValidateSet('ReadOnly', 'Modify')][string]$FileAccess = 'ReadOnly'
 )
 
 Set-StrictMode -Version Latest
@@ -106,6 +107,35 @@ function Assert-DiscoveryJob {
         if ([string]$job[0].$name -notin @('Off', 'False')) { throw "Unsafe content scan setting: $name must be Off." }
     }
     if ([string]$job[0].LabelFilesByContent -notin @('On', 'True')) { throw 'Content inspection requires LabelFilesByContent On; Enforce Off prevents label writes.' }
+}
+
+function Assert-LabOnlineJob {
+    param([ValidateSet('On', 'Off')][string]$Enforce = 'On')
+    $configuration = Get-ScannerConfiguration
+    if ([string]$configuration.Cluster -cne $ClusterName -or [string]$configuration.OnlineConfiguration -ne 'On') {
+        throw 'An online configuration for the approved cluster is required.'
+    }
+    $jobs = @(Get-ScannerContentScan | Where-Object { $_.PSObject.Properties.Name -contains 'Enforce' })
+    if ($jobs.Count -ne 1) { throw 'Expected one portal-managed content scan job.' }
+    $job = $jobs[0]
+    $repositories = @(foreach ($repository in (Get-ScannerRepository)) { $repository })
+    if ($repositories.Count -ne 1 -or [string]$repositories[0].Path -ine $repositoryPath) {
+        throw 'Portal job must contain only the exact approved fixtures UNC.'
+    }
+    $effective = $repositories[0]
+    if ([string]$job.Schedule -ne 'Manual' -or [string]$effective.Enforce -ne $Enforce -or
+        [string]$effective.LabelFilesByContent -ne 'On') {
+        throw "Portal job must be Manual, content-based, with Enforce $Enforce."
+    }
+    foreach ($name in 'RelabelFiles', 'AllowLabelDowngrade', 'EnforceDefaultLabel', 'EnableDlp') {
+        if ([string]$effective.$name -ne 'Off') { throw "Portal repository must keep $name Off." }
+    }
+    if ([string]$job.RecommendedAsAutomatic -notin @('Off', 'False')) {
+        throw 'Portal job must not promote recommended labels to automatic.'
+    }
+    if ([string]$effective.DefaultLabelType -ne 'None') {
+        throw 'Only content matches may label files; set the portal default label to None.'
+    }
 }
 
 function Set-LabReadiness {
@@ -406,7 +436,8 @@ switch ($Stage) {
         $token = Invoke-RestMethod -Uri "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$resource&client_id=$IdentityClientId" -Headers @{Metadata='true'} -UseBasicParsing
         foreach ($item in $paths) {
             $inheritance = if ($item.PSIsContainer) { 'OICI' } else { '' }
-            $sddl = "O:${adminSid}G:${adminSid}D:P(A;${inheritance};FA;;;SY)(A;${inheritance};FA;;;${adminSid})(A;${inheritance};0x1200a9;;;${serviceSid})"
+            $rights = if ($FileAccess -eq 'Modify' -and $item.FullName -ine $rootPath) { '0x1301bf' } else { '0x1200a9' }
+            $sddl = "O:${adminSid}G:${adminSid}D:P(A;${inheritance};FA;;;SY)(A;${inheritance};FA;;;${adminSid})(A;${inheritance};${rights};;;${serviceSid})"
             $relative = $item.FullName.Substring($rootPath.Length).Trim('\')
             $encoded = (@($relative.Split('\') | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/')
             $url = "https://$StorageAccountName.file.core.windows.net/$ShareName"
@@ -425,7 +456,22 @@ switch ($Stage) {
             Invoke-WebRequest -Uri "$url$query" -Method Put -Headers $headers -UseBasicParsing | Out-Null
         }
         $token = $null
-        [pscustomobject]@{ Repository=$repositoryPath; FixtureFiles=$fileCount; ScannerAccess='ReadAndExecute'; AclBackup=$backupPath } | ConvertTo-Json
+        $access = if ($FileAccess -eq 'Modify') { 'Modify' } else { 'ReadAndExecute' }
+        [pscustomobject]@{ Repository=$repositoryPath; FixtureFiles=$fileCount; ScannerAccess=$access; RootAccess='ReadAndExecute'; AclBackup=$backupPath } | ConvertTo-Json
+    }
+    'Online' {
+        Import-ScannerModule
+        if ([string](Get-ScanStatus).ClusterStatus -ne 'Idle') { throw 'Online migration requires an idle scanner.' }
+        if ([string](Get-ScannerConfiguration).Cluster -cne $ClusterName) { throw 'Connect the approved cluster before changing online mode.' }
+        Set-ScannerConfiguration -OnlineConfiguration On -ReportLevel Debug | Out-Null
+        Restart-Service MIPScanner -ErrorAction Stop
+        Set-LabReadiness @{
+            configurationMode='Online'; discoveryComplete=$false; readyForEnforcement=$false
+            blockingLimitation='Portal configuration must pass the online scope and enforcement gates before scanning.'
+        }
+        $configuration = Get-ScannerConfiguration
+        if ([string]$configuration.OnlineConfiguration -ne 'On') { throw 'Online configuration read-back failed.' }
+        [pscustomobject]@{ Cluster=$ClusterName; OnlineConfiguration=[string]$configuration.OnlineConfiguration } | ConvertTo-Json
     }
     'Authenticate' {
         Invoke-LabWorker 'Authenticate'
@@ -450,9 +496,19 @@ switch ($Stage) {
         Save-LabDiscoveryReadiness
         Get-Content -LiteralPath (Join-Path $stateDirectory 'scan-result.json') -Raw
     }
+    { $_ -in @('StartEnforcement', 'VerifyEnforcement') } {
+        Import-ScannerModule
+        Assert-LabOnlineJob
+        if ([string](Get-ScanStatus).ClusterStatus -ne 'Idle') { throw 'Wait for an idle scanner before requesting enforcement verification.' }
+        $operation = if ($Stage -eq 'StartEnforcement') { 'ScanEnforcement' } else { 'VerifyEnforcement' }
+        Set-LabReadiness @{ configurationMode='Online'; readyForEnforcement=$false; enforcementEnabled=$true }
+        Invoke-LabWorker $operation
+        Get-Content -LiteralPath (Join-Path $stateDirectory 'enforcement-result.json') -Raw
+    }
     'RefreshPolicy' {
         Import-ScannerModule
-        Assert-DiscoveryJob
+        if ([string](Get-ScannerConfiguration).OnlineConfiguration -eq 'On') { Assert-LabOnlineJob -Enforce Off }
+        else { Assert-DiscoveryJob }
         if ([string](Get-ScanStatus).ClusterStatus -ne 'Idle') { throw 'Policy refresh requires an idle scanner.' }
         Set-LabReadiness @{ discoveryComplete=$false; readyForEnforcement=$false; enforcementEnabled=$false }
         Invoke-LabWorker 'RefreshPolicy'
@@ -492,8 +548,9 @@ switch ($Stage) {
                 Out-File -LiteralPath (Join-Path $stateDirectory 'policy-refresh-diagnostics.txt') -Encoding utf8
             break
         }
-        if ($WorkerOperation -notin @('Scan', 'Verify')) { throw 'Unsupported worker operation.' }
-        Assert-DiscoveryJob
+        if ($WorkerOperation -notin @('Scan', 'Verify', 'ScanEnforcement', 'VerifyEnforcement')) { throw 'Unsupported worker operation.' }
+        $enforcement = $WorkerOperation -in @('ScanEnforcement', 'VerifyEnforcement')
+        if ($enforcement) { Assert-LabOnlineJob } else { Assert-DiscoveryJob }
         $files = @(Get-ChildItem -LiteralPath $repositoryPath -File -Recurse -ErrorAction Stop)
         if ($files.Count -eq 0) { throw 'Azure Files fixture repository is empty.' }
         $scannerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -501,13 +558,18 @@ switch ($Stage) {
         $aclPaths = @("\\$StorageAccountName.file.core.windows.net\$ShareName", $repositoryPath) + @($files.FullName)
         foreach ($path in $aclPaths) {
             $acl = Get-Acl -LiteralPath $path
-            if (-not $acl.AreAccessRulesProtected) { throw "Unexpected inherited ACL on $path." }
+            if ($path -in @("\\$StorageAccountName.file.core.windows.net\$ShareName", $repositoryPath) -and -not $acl.AreAccessRulesProtected) {
+                throw "Unexpected inherited directory ACL on $path."
+            }
             $rules = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
             if ($rules.Count -ne 3) { throw "Unexpected ACL entries on $path." }
             foreach ($rule in $rules) {
                 $sid = $rule.IdentityReference.Value
                 $expectedRights = if ($sid -eq $scannerSid) {
-                    [Security.AccessControl.FileSystemRights]([int][Security.AccessControl.FileSystemRights]::ReadAndExecute -bor [int][Security.AccessControl.FileSystemRights]::Synchronize)
+                    $rights = if ($enforcement -and $path -ine "\\$StorageAccountName.file.core.windows.net\$ShareName") {
+                        [Security.AccessControl.FileSystemRights]::Modify
+                    } else { [Security.AccessControl.FileSystemRights]::ReadAndExecute }
+                    [Security.AccessControl.FileSystemRights]([int]$rights -bor [int][Security.AccessControl.FileSystemRights]::Synchronize)
                 } else { [Security.AccessControl.FileSystemRights]::FullControl }
                 if ($sid -notin @($scannerSid, $adminSid, 'S-1-5-18') -or $rule.AccessControlType -ne 'Allow' -or $rule.FileSystemRights -ne $expectedRights) {
                     throw "Unexpected permissions on $path."
@@ -526,8 +588,9 @@ switch ($Stage) {
             Remove-Item -LiteralPath $probe -ErrorAction Stop
         }
         catch [UnauthorizedAccessException] { $writeDenied = $true }
-        if (-not $writeDenied) { throw 'Scanner unexpectedly has write access to the discovery repository.' }
-        if ($WorkerOperation -eq 'Scan') {
+        if ($enforcement -and $writeDenied) { throw 'Scanner needs fixture write access for enforcement.' }
+        if (-not $enforcement -and -not $writeDenied) { throw 'Scanner unexpectedly has write access to the discovery repository.' }
+        if ($WorkerOperation -in @('Scan', 'ScanEnforcement')) {
             $started = [datetime]::UtcNow
             [IO.File]::WriteAllText((Join-Path $stateDirectory 'scan-started-utc.txt'), $started.ToString('o'))
             Start-Scan -Reset -Force | Out-Null
@@ -536,7 +599,7 @@ switch ($Stage) {
             $started = [datetime]::Parse((Get-Content (Join-Path $stateDirectory 'scan-started-utc.txt') -Raw)).ToUniversalTime()
         }
         $reportDirectory = Join-Path $env:LOCALAPPDATA 'Microsoft\MSIP\Scanner\Reports'
-        $deadline = [datetime]::UtcNow.AddMinutes($(if ($WorkerOperation -eq 'Verify') { 5 } else { 90 }))
+        $deadline = [datetime]::UtcNow.AddMinutes($(if ($WorkerOperation -in @('Verify', 'VerifyEnforcement')) { 5 } else { 90 }))
         $result = $null
         while ([datetime]::UtcNow -lt $deadline) {
             Start-Sleep -Seconds 15
@@ -553,8 +616,16 @@ switch ($Stage) {
             $covered = $true
             foreach ($file in $files) {
                 $matching = @($rows | Where-Object { $_.'File Name' -ieq $file.FullName })
+                if ($enforcement -and $matching.Count -eq 0 -and $file.Extension -ieq '.ptxt') {
+                    $original = [IO.Path]::ChangeExtension($file.FullName, '.txt')
+                    $matching = @($rows | Where-Object { $_.'File Name' -ieq $original })
+                }
                 if ($matching.Count -eq 0) { $covered = $false; break }
-                if (@($matching | Where-Object Status -ne 'Success').Count) { throw 'An Azure Files fixture was not scanned successfully.' }
+                $invalid = @($matching | Where-Object {
+                    $_.Status -ne 'Success' -and -not ($enforcement -and $_.Status -eq 'Skipped' -and
+                        $_.Comment -eq 'No label or action to apply' -and -not $_.'Applied Label ID')
+                })
+                if ($invalid.Count) { throw 'An Azure Files fixture was not scanned successfully.' }
             }
             if (-not $covered) { continue }
             $result = [pscustomobject]@{
@@ -565,7 +636,7 @@ switch ($Stage) {
                 SummaryPath = $summaries[0].FullName
                 DetailedReportPath = $details[0].FullName
                 Summary = $summary
-                EnforcementEnabled = $false
+                EnforcementEnabled = $enforcement
                 ExpectedDetectionsValidated = $false
                 ScannerWriteDenied = $writeDenied
                 RestrictiveAclsValidated = $true
@@ -576,7 +647,13 @@ switch ($Stage) {
             break
         }
         if (-not $result) { throw 'No fresh successful report covers every Azure Files fixture before the deadline.' }
-        $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $stateDirectory 'scan-result.json')
+        $name = if ($enforcement) { 'enforcement-result.json' } else { 'scan-result.json' }
+        if ($enforcement) {
+            $statuses = @(foreach ($status in (Get-FileStatus -Path @((Get-ChildItem -LiteralPath $repositoryPath -File).FullName))) { $status })
+            ConvertTo-Json -InputObject $statuses -Depth 8 | Set-Content -LiteralPath (Join-Path $stateDirectory 'enforcement-file-status.json')
+            $result | Add-Member -NotePropertyName FileStatusPath -NotePropertyValue (Join-Path $stateDirectory 'enforcement-file-status.json')
+        }
+        $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $stateDirectory $name)
     }
     'Status' {
         $task = Get-ScheduledTask -TaskName 'PurviewIPAsCode-AdLab-Worker' -ErrorAction SilentlyContinue

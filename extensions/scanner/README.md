@@ -1,13 +1,13 @@
 # Private scanner demo (beta)
 
-This add-on deploys a private Windows scanner VM, SQL Express, Key Vault, managed identity, and an Azure Files account/share. **Published beta.1 scans local synthetic fixtures, not Azure Files.** Current source also includes an optional IaaS AD DS lab workflow for private Azure Files discovery; it is separate from the original bootstrap and does not change immutable beta assets. Shared-key storage access stays disabled. No production content or enforcement is supported.
+This add-on deploys a private Windows scanner VM, SQL Express, Key Vault, managed identity, and an Azure Files account/share. **Published beta.1 scans local synthetic fixtures, not Azure Files.** Current source includes optional IaaS AD DS/private Azure Files discovery and an explicitly approved portal-managed lab labeling path; neither changes immutable beta assets. Shared-key storage access stays disabled. Production enforcement is not supported.
 
 ## Create the portal cluster and job first
 
 In Microsoft Purview, open **Settings > Information Protection > Information protection scanner**. You need tenant permissions that expose this page; it is not the Data Map scanning UI.
 
 1. Create a **cluster** and record its exact name. The tested lab uses `Az-Demo`. Set `scannerClusterName` in the ARM parameters to the same value; installing the scanner does not create the portal cluster.
-2. Create a **content scan job**, assign it to that cluster, select manual scheduling and discovery of all information types, and explicitly disable enforcement, content-based labeling, relabeling, and default-label enforcement.
+2. Create a **content scan job**, assign it to that cluster, select manual scheduling and discovery of all information types, enable content-based labeling, and explicitly disable enforcement, relabeling, and default-label enforcement.
 3. Add repository `C:\PurviewScannerDemo\fixtures` to that job. This is a path on the scanner VM, not the operator workstation. Assigning a cluster without a job/repository does not make the node scan.
 4. Deploy with `scannerConfigurationMode=Online` (the default). The node connects using its configured cluster and authentication; confirm it appears under **Nodes** after the service starts and configuration propagates.
 
@@ -37,7 +37,7 @@ Start-Scan
 Get-ScanStatus
 ```
 
-Keep every enforcement/labeling switch off. If repositories are empty or the content-scan switches are blank, finish assigning the portal job; do not force offline mode to hide the problem. The helper does not start a scan or modify the portal job.
+Keep enforcement Off and content-based labeling On for discovery. Inspect effective repository settings as well as job settings: online jobs can expose null job-level defaults while repositories contain resolved settings. Do not force offline mode to hide a configuration problem. The helper does not start a scan or modify the portal job.
 
 ## Deployment prerequisites
 
@@ -70,7 +70,7 @@ EnforceDefaultLabel Off
 
 Within 90 minutes, bootstrap requires an idle node **and fresh summary/detailed reports covering every fixture with zero failures**. An idle node or elapsed timer alone never sets `discoveryComplete=true`. Reports remain under the service account's `%LOCALAPPDATA%\Microsoft\MSIP\Scanner\Reports`; worker output and `readiness.json` remain under `C:\ProgramData\PurviewIPAsCode`.
 
-Readiness keeps provisioning, software, authentication, seeding and discovery separate. Successful discovery clears stale failure codes but leaves enforcement and enforcement readiness false. Compare sensitive-information-type results against the fixture manifest separately; a completed scan does not prove expected detections. `Enable-ScannerProtection.ps1` remains deliberately fail-closed.
+Readiness keeps provisioning, software, authentication, seeding and discovery separate. Successful discovery clears stale failure codes but leaves enforcement and enforcement readiness false. Compare sensitive-information-type results against the fixture manifest separately; a completed scan does not prove expected detections. `Enable-ScannerProtection.ps1` requires explicit approval tied to native detection evidence, exact repository/cluster and `-Apply`; the online worker independently checks effective configuration, ACLs and actual write access.
 
 ## Connect an existing Azure Files account privately
 

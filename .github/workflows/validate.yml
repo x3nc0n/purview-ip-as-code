@@ -45,6 +45,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Configuration schema validation failed.' }
           python scripts/validate-infrastructure-plan.py
           if ($LASTEXITCODE -ne 0) { throw 'Infrastructure plan validation failed.' }
+          python -m unittest discover -s tests -p "test_*.py"
+          if ($LASTEXITCODE -ne 0) { throw 'Fixture generator regression tests failed.' }
 
       - name: Validate PowerShell, SIT XML, and synthetic fixtures
         shell: pwsh

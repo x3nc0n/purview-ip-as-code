@@ -1,3 +1,3 @@
-Synthetic identifier count demonstration. Repeated values are deliberate and do not represent unique people.
+Synthetic identifier count demonstration. Invented values do not represent people.
 
 Invalid negative-control value: 000-00-0000.

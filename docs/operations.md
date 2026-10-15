@@ -96,10 +96,166 @@ matched their TXT, DOCX and PDF positives; the four public/isolated-address/
 generic-SCADA/generic-credential controls did not match BCSI. The scanner service
 remained Running as its domain account, with no temporary worker tasks or local
 administrator membership. Evidence is separate from generic discovery readiness:
-PII and manual-label behavior remain unvalidated, so enforcement stays blocked.
+PII and manual-label behavior were not established by that discovery run.
 Use `-EvidencePath` on the verifier to retain its JSON beside the protected
 guest scan reports. The lab retains
 `C:\ProgramData\PurviewIPAsCode-AdLab\bcsi-native-evidence.json`.
+
+## Online lab labeling
+
+Online configuration, enforcement and audit reporting are independent settings.
+`OnlineConfiguration On` downloads the job from Purview; `Enforce On` permits
+label/protection writes. Local configuration does **not** disable cloud audit.
+Activity explorer receives scanner discovery and labeling events in either mode.
+
+In **Settings > Information Protection > Information protection scanner**, use
+the existing `Az-Demo` cluster and `demo-scan` job. Keep **Manual** scheduling,
+all information types, content-based labeling On, recommended-as-automatic Off,
+DLP Off, relabel Off, downgrade Off, default-label enforcement Off and default
+label **None**. The only repository must be
+`\\stscannerdemod12f.file.core.windows.net\scanner-demo\fixtures`.
+Repository settings must resolve to these same values; do not assume blank
+job-level PowerShell properties mean disabled repository settings.
+
+On the scanner, run `Invoke-ScannerAdLab.ps1 -Stage Online` to switch the
+existing cluster to portal-managed configuration and detailed reporting.
+Keep portal enforcement Off while refreshing policy and preparing access.
+The ACL administration wrapper `Set-ScannerAdLabFilePermissions.ps1` defaults
+to `-FileAccess ReadOnly`; the explicitly authorized lab labeling path uses
+`-FileAccess Modify`. It keeps the share-root scanner ACE read/execute and
+grants Modify only to fixtures and their files. SYSTEM/domain administrators
+retain FullControl; unrelated principals are not added.
+
+The unsynchronized AD scanner identity cannot receive an Entra share-role
+assignment. The wrapper therefore uses default SMB Contributor authorization,
+which is **storage-account-wide**, while restrictive NTFS ACLs limit actual
+write access. It refuses accounts containing any other share. This is a
+dedicated lab arrangement, not a general-purpose storage-account policy.
+Temporary privileged FilesREST grants are still removed after ACL setup.
+
+`Set-ScannerPublishingSettings.ps1` is a plan-first, certificate-authenticated
+launcher with explicit tenant and existing publishing-policy GUID checks.
+`-Apply` backs up that policy and sets `EnableAudit=True` and
+`PFileSupportedExtensions=[".txt"]`, preserving its audience and other settings.
+TXT needs this scanner setting to support encryption in addition to native
+Office/PDF protection. Protected TXT filenames can become `.ptxt`. Scanner SIT
+matches are sent automatically; `LogMatchedContent` is not required for scanner
+reporting. Do not broaden the pilot audience to fix a distribution error.
+An operator can retry service-reported synchronization timeouts with
+`Set-LabelPolicy -Identity <existing-policy-guid> -RetryDistribution`.
+
+After propagation, run `RefreshPolicy` with enforcement Off, enable enforcement
+in the **portal**, and wait for downloaded repository settings to reflect On.
+`Enable-ScannerProtection.ps1` does not edit the portal job. It runs an explicitly
+approved enforcement scan only with `-Apply`, native nine-positive discovery
+evidence and an approval JSON naming `approved=true`, `approvedBy`,
+`discoveryRunId` (the evidence's `ScanEndedAtUtc`), `cluster`, and `repository`.
+Keep the approval and all reports private. Deploy it beside
+`Invoke-ScannerAdLab.ps1` on the scanner before invoking it.
+
+`Invoke-ScannerAdLab.ps1 -Stage StartEnforcement` provides the same strict
+online/scope/configuration/ACL gates for an already-approved operator run.
+It tests real SMB write access under the domain account, starts a full scan,
+requires fresh successful coverage of every input file and saves
+`enforcement-result.json` and `enforcement-file-status.json` in the protected
+lab state directory. `VerifyEnforcement` can recover verification after a
+completed scan if the administration request was interrupted.
+`Test-ScannerLabelWrites.ps1 -BesLabelId <inventory BES GUID>` independently
+requires the nine positive formats to have both a matching report label and
+persisted `Get-FileStatus` BES metadata with Rights Management protection.
+Discovery proposal counts are never accepted as label writes. Relabel/downgrade
+Off is a configuration safeguard, not proof that every manual-label scenario
+has been tested. Production accuracy and clean ARM redeployment remain separate.
+
+## Resetting the private Azure Files demo
+
+### PII fixture correction
+
+The original PII documents were not native high-confidence SSN test data:
+`123-45-6789` produced no Microsoft classifier matches even with SSN keywords,
+and the documents also lacked the required supporting keywords. Repeating one
+replacement value 200 times produced a native count of **one**. The original
+PDF writer additionally retained only the first 48 lines.
+
+Generator 1.0.1 uses distinct invented values, each prefixed with **Synthetic
+Social Security Number SSN**, and emits all PDF pages. Server-side
+`Test-DataClassification` confirmed confidence-85 counts of 1, 199, 200 and 250
+for the corrected text. No label threshold or SIT definition was weakened.
+These values are invented and not linked to people; plausible SSNs cannot be
+guaranteed never issued. Local tests check distinct counts/context and PDF
+content, but native file extraction and actual tiered labels must still be
+verified after resetting the share from the corrected commit and rescanning.
+The Exchange fixture's service-policy expectation is Recipients Only; when
+scanned as a file, the 200+ SSN condition instead selects Internal Only.
+
+Run from a repository checkout on your administration machine, signed into Azure
+CLI for the lab tenant. The scanner VM must be running, its scan must be idle,
+and its job schedule must be Manual. The operator needs VM Run Command access
+and permission to create/delete a temporary share-scoped role assignment.
+
+```powershell
+# Plan only; no Azure changes:
+.\extensions\scanner\scripts\Reset-ScannerDemoFiles.ps1
+# Preview the destructive scope:
+.\extensions\scanner\scripts\Reset-ScannerDemoFiles.ps1 -Apply -WhatIf
+# Reset after reviewing the confirmation:
+.\extensions\scanner\scripts\Reset-ScannerDemoFiles.ps1 -Apply
+```
+
+Defaults target only
+`\\stscannerdemod12f.file.core.windows.net\scanner-demo\fixtures`.
+The script deletes **all files directly in that directory**, including labeled
+or protected copies, and restores 28 pristine documents plus `fixtures.json`
+from the checkout's committed HEAD, not potentially labeled working-tree files.
+It does not remove labels from existing documents or preserve their edits.
+Archive anything you want to keep before running it. Unexpected subdirectories
+cause a refusal before any deletion; no recursive share/account clearing occurs.
+The share, directory, inherited ACLs, private networking and snapshots are not
+deleted or reconfigured.
+
+The reset executes FilesREST inside the scanner VM using its managed identity,
+temporarily granting only share-scoped privileged contributor access if needed.
+Only a grant created by this invocation is removed in `finally`; existing
+grants are untouched. No storage keys, public access, scanner-account elevation,
+or new SMB write permission are used. The worker stops the idle scanner during
+replacement, verifies every restored file byte-for-byte, invalidates old
+discovery readiness, archives the previous current scan/BCSI evidence, and
+restarts the service even if replacement fails. Failure can leave a partial
+corpus; fix the reported error and rerun the reset. Do not start a demo scan
+until the reset reports success.
+
+The reset does not start a scan, change management mode or enable enforcement.
+It is compatible with a portal-managed **Manual** job; a continuously scheduled
+job is refused so that restored files remain unlabeled until requested.
+For the approved online demo, run `StartEnforcement` after reset; for the
+read-only offline workflow, use `StartDiscovery`. The helper supplies the
+service-account context and resets the file scan cache. Old dated reports
+remain historical evidence, not observations of the restored files.
+
+## Viewing BCSI matches
+
+In Purview, **Information Protection > Classifiers > Sensitive info types**
+shows the three BCSI definitions; select one and use **Test** with a synthetic
+fixture to exercise that SIT. This is not an inventory of files scanned on
+Azure Files. For file-level cloud metadata, open
+[Activity explorer](https://purview.microsoft.com/informationprotection/dataclassification/activityexplorer)
+and set the date range around the scan. Filter for **File discovered** and
+**Sensitivity label applied**, device `pipascodelab-sc.corp.tiny.local`,
+application **Microsoft Purview Information Protection Scanner**, or the BES
+label. Scanner events can appear under **Endpoint devices** rather than an
+Azure Files location. Open an event to inspect the UNC, user/application,
+sensitive-information IDs/counts/confidence, label and protection metadata.
+Discovery events do not prove a label was written. Audit ingestion is not
+instantaneous; retain scan timestamps and distinguish pending labeling events
+from already ingested discoveries. Scanner summaries are also visible under
+the portal's content scan job; those are not a per-file content inventory.
+Do not expect Azure Files documents automatically to populate Content explorer.
+
+For immediate native evidence, review the service account's
+`%LOCALAPPDATA%\Microsoft\MSIP\Scanner\Reports\DetailedReport_*.csv` on the scanner
+VM. Filter **Information Type Name** for BCSI and inspect **File Name** and
+**Applied Label ID**. In discovery, the applied-label column is a proposal,
+not a label write. See [Microsoft's scanner reporting instructions](https://learn.microsoft.com/en-us/purview/deploy-scanner-manage#run-a-discovery-cycle-and-view-reports-for-the-scanner).
 
 ## Consolidating an existing nine-policy deployment
 
@@ -125,6 +281,7 @@ Create the portal cluster and assign a discovery-only content scan job before de
 
 The content scan job must explicitly use `Enforce Off`, `LabelFilesByContent On`, `RelabelFiles Off`, and `EnforceDefaultLabel Off`. Content inspection must be enabled even for reporting-only discovery; `Enforce Off` prevents label writes. Use `DiscoverInformationTypes All` to report sensitive information types independently of label conditions. Keep `EnableDlp Off` unless an on-premises scanner DLP policy actually exists; cloud auto-label policies are not scanner DLP policies. Online bootstrap reads and checks that job rather than overwriting it using offline-only cmdlets. Offline mode must be explicitly selected and does not establish portal registration. Bootstrap fails on unsupported cmdlet parameters, authentication failures, incorrect hashes/signatures, unowned fixture contents, missing/unsafe job settings, or no fresh reports covering every fixture within 90 minutes. Idle status alone is insufficient. Successful discovery clears stale failure codes. Reports are local to the service account's `%LOCALAPPDATA%\Microsoft\MSIP\Scanner\Reports`; inspect events and reports without exporting content or credentials.
 
-Published beta.1 scans local fixtures, not Azure Files, and remains unchanged. Current source includes an optional private IaaS AD DS/Azure Files lab workflow with encrypted credentials, a domain scanner identity and keyless ACL setup. This explicitly approved offline job is separate from portal configuration. Migration invalidates old readiness; fresh UNC reports, restrictive ACLs, service-account read access and write denial are required before publishing completed discovery. Expected SIT detections and enforcement remain separate, unvalidated outcomes. See [scanner operations](../extensions/scanner/README.md) for the staged workflow, cluster migration, workday startup limitations and exact commands.
+Published beta.1 scans local fixtures, not Azure Files, and remains unchanged. Current source includes an optional private IaaS AD DS/Azure Files lab workflow with encrypted credentials, a domain scanner identity and keyless ACL setup. The optional offline discovery migration is separate from portal configuration;
+use the online lab transition above for actual portal-managed labeling. Migration invalidates old readiness; fresh UNC reports, restrictive ACLs, service-account read access and write denial are required before publishing completed discovery. Expected SIT detections and enforcement remain separate, unvalidated outcomes. See [scanner operations](../extensions/scanner/README.md) for the staged workflow, cluster migration, workday startup limitations and exact commands.
 
 The Azure deployment workflow requires a manual dispatch, an existing resource group, OIDC, environment credentials, and human approval. Tear down only after preserving the readiness report and reviewing resource contents. Delete the resource group only after confirming the exact name, no retained lab data, and no unrelated resources. Soft delete and purge protection mean the Key Vault may remain recoverable after resource deletion; follow the organization's retention and purge controls.

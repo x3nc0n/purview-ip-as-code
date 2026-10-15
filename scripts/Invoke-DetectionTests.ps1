@@ -40,7 +40,15 @@ $results = foreach ($fixture in $manifest.fixtures) {
         }
         if ($matchedDetector) { break }
     }
-    $ssnCount = [regex]::Matches($text, '\b(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b').Count
+    $ssnMatches = [regex]::Matches($text, '\b(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b')
+    $ssnCount = @($ssnMatches | ForEach-Object Value | Sort-Object -Unique).Count
+    foreach ($match in $ssnMatches) {
+        $start = [Math]::Max(0, $match.Index - 300)
+        $length = [Math]::Min($text.Length - $start, $match.Length + 600)
+        if ($text.Substring($start, $length) -notmatch '(?i)\bSSN\b|social security number') {
+            $failures.Add("$($fixture.id): synthetic SSN lacks supporting keywords within 300 characters")
+        }
+    }
     $actualLabel = 'none'
     if ($matchedConfidence -ge 85) {
         $actualLabel = 'highly-confidential-bes'

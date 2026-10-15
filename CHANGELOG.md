@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixes PII demo fixtures: replaces the natively nonmatching `123-45-6789`, supplies nearby SSN keywords and distinct synthetic values because Purview deduplicates identical values. Native service tests confirm confidence-85 counts at 1/199/200/250 without weakening label thresholds. PDF generation now retains all records across pages instead of truncating after 48 lines.
+- The online Azure Files scan completed 2026-10-15 at 14:38:27 UTC with 29 files, 12 actual BES labels/encryptions and zero failures. Persisted metadata confirmed all 12 protections, all nine BCSI detector/format positives and four negative controls. That scan preceded the PII fixture correction and does not validate corrected PII labeling.
+- Adds an explicit online lab labeling path with Manual portal scheduling, exact-UNC/effective-repository gates, fixture-only Modify ACLs, dedicated-account SMB authorization and persisted label/protection verification. Production rollout and relabeling remain unsupported.
+- Adds saved, tenant-checked pilot publishing settings for audit and protected TXT support. Corrects reporting guidance: scanner discovery and label events can reach Activity explorer regardless of online/local configuration mode.
+- Adds a plan-first private Azure Files demo reset that restores committed, pristine fixtures using keyless FilesREST on the scanner VM, verifies restored bytes, preserves directory ACLs and archives stale current scan evidence. It deletes only files directly in the demo fixtures directory and refuses subdirectories or active/scheduled scans.
+
 - Adds source-defined label-level automatic SSN tiers and OR-based BCSI conditions, with inventory-backed deployment, private backups, semantic read-back checks and drift reporting. Preserves the separate Exchange Do Not Forward service policy.
 - Adds Groups & sites scopes, private Confidential containers with existing-guest SharePoint sharing, and private Highly Confidential/BES containers with guests and external sharing blocked. Preserves existing extra scopes and low-tier container settings; no existing site or team is relabeled.
 - Adds saved certificate-authenticated PowerShell deployment and label synchronization; deployment credentials remain outside the repository and GitHub.
