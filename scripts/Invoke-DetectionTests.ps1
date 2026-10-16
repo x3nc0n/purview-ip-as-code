@@ -1,3 +1,11 @@
+<#
+.SYNOPSIS
+Checks synthetic fixture expectations with local regexes, not the Purview service.
+.DESCRIPTION
+Passing results do not prove native SIT matches, label writes, encryption or
+reader authorization. See docs\detection-rationale.md for the exact demo
+patterns and docs\operations.md for owner/member/nonmember access tests.
+#>
 [CmdletBinding()]
 param([string]$ManifestPath = 'demo\manifests\fixtures.json')
 

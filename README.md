@@ -17,6 +17,17 @@ Version-controlled Microsoft Purview sensitivity labels, a separately managed BC
 
 The example label hierarchy is `Public`, `Non-Business`, `General`, `Confidential`, and `Highly Confidential`. Confidential and Highly Confidential each have `Any User (No Protection)`, `Internal Only`, and `Recipients Only` children. `BES` exists only as the final/highest-priority Highly Confidential child. BCSI matches target only that BES label. PII policies do not exclude BCSI and never target BES.
 
+**BES access is not a group-membership-only test.** The BES group receives fixed
+`VIEW, EDIT, PRINT, EXPORT` rights, but the Rights Management owner and authorized
+RMS super users can have access independently. For SharePoint/OneDrive service
+auto-labeling, the account that last modified the file becomes its protection
+owner/issuer. An administrator who uploaded the sample can therefore open it
+without being in the BES group; Global Administrator status alone is not an
+encryption bypass. `EXPORT` also permits an authorized recipient to remove
+protection. Use separate uploader, allowed-reader and denied-reader identities,
+and verify actual encryption before claiming access enforcement. Follow the
+[BES access demo runbook](docs/operations.md#bes-access-demo-owner-rights-and-denial-tests).
+
 ### Start locally
 
 Requirements: PowerShell 7.4+, Pester 6.2+, PSScriptAnalyzer 1.25+, Python 3 with `requirements-dev.txt`, and Azure CLI with Bicep CLI v0.46.1 (for deterministic scanner-template compilation). ExchangeOnlineManagement is only relevant to tenant operations.
@@ -83,5 +94,6 @@ No Azure resources are deployed by CI. The `deploy-demo` workflow is manually di
 - Custom XML compilation and local synthetic tests do not prove Microsoft Purview has accepted a SIT package or observed the expected confidence/count.
 - The overlay intentionally has placeholder-only values. Never commit tenant IDs, real group IDs, app secrets, certificates, tokens, or operational inventories.
 - Content labels complement SharePoint/OneDrive permissions, identity governance, and storage ACLs; they do not replace them.
+- A SIT match, applied label, persisted encryption, successful authorized open and failed unauthorized open are separate outcomes. Content explorer preview failure is not an unauthorized-user test; encrypted content and viewer-role requirements can prevent preview.
 
 Read [`docs/prerequisites.md`](docs/prerequisites.md), [`docs/operations.md`](docs/operations.md), [`docs/detection-rationale.md`](docs/detection-rationale.md), [`docs/protection-gaps.md`](docs/protection-gaps.md), and [`docs/nerc-cip-scope.md`](docs/nerc-cip-scope.md) before connecting a tenant.

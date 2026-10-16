@@ -72,6 +72,29 @@ Within 90 minutes, bootstrap requires an idle node **and fresh summary/detailed 
 
 Readiness keeps provisioning, software, authentication, seeding and discovery separate. Successful discovery clears stale failure codes but leaves enforcement and enforcement readiness false. Compare sensitive-information-type results against the fixture manifest separately; a completed scan does not prove expected detections. `Enable-ScannerProtection.ps1` requires explicit approval tied to native detection evidence, exact repository/cluster and `-Apply`; the online worker independently checks effective configuration, ACLs and actual write access.
 
+## Demonstrating protected-file access
+
+`Test-ScannerLabelWrites.ps1` confirms persisted labels and RMS-protection flags,
+not whether specific people can open or are denied. BES grants its configured
+group `VIEW, EDIT, PRINT, EXPORT`; protection owners and authorized RMS super
+users can have independent access, and `EXPORT` permits removing protection.
+An empty BES group therefore does not mean every user is denied.
+
+Keep the AD scanner service identity (SMB/NTFS access), delegated cloud MIP
+identity (labeling/protection), VM managed identity (Key Vault/FilesREST), and
+test readers distinct. Do not infer Rights Management ownership from a Windows
+file owner or service logon. Inspect the protected file's actual owner/issuer.
+The SharePoint/OneDrive service auto-label path is different: its last-modifier
+account becomes the protection owner/issuer, so the administrator who uploaded
+those cloud examples is not a valid denied-reader account.
+
+Follow the [BES access test matrix](../../docs/operations.md#access-test-matrix):
+one approved BES member and one nonmember, both with repository access and
+neither an owner/issuer nor RMS super user, using separate signed-in sessions.
+Global Administrator alone is not a decryption bypass. Content explorer cannot
+preview encrypted content, so a portal preview failure is not a denial test.
+The private-files reset does not reset cloud samples or remove owner rights.
+
 ## Connect an existing Azure Files account privately
 
 `infra\connect-existing-files.bicep` is a separate, incremental connection template.

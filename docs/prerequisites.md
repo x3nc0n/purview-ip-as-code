@@ -13,6 +13,28 @@ Use an explicitly configured, non-production tenant overlay with a detected mode
 
 Never put real tenant/group/app identifiers, operational inventories, passwords, app secrets, certificates, or tokens in a committed overlay.
 
+### Identities for a protection demo
+
+Prepare separate, operator-approved uploader, BES-member reader and nonmember
+reader accounts. Both readers need baseline SharePoint/library or SMB read
+access, but neither should be the protection owner/issuer or an RMS super user.
+Verify effective/nested group membership, supported Office/client sign-in and
+network access before testing. Do not silently add users or grant recovery roles.
+
+Service-side SharePoint/OneDrive auto-labeling makes the last modifier the
+Rights Management owner/issuer. An administrator who uploaded the sample is
+therefore not a suitable denied reader just because that account is outside the
+BES group. The lab leaves automatic owner rights enabled, and BES includes
+`EXPORT` (removing protection), not view-only access. Global Administrator status
+alone does not confer decryption rights. See the
+[BES access runbook](operations.md#bes-access-demo-owner-rights-and-denial-tests)
+for checks and evidence boundaries.
+
+For portal inspection, verify Content Explorer List Viewer/Content Viewer roles
+as appropriate. Administrator, site ownership and label publishing do not
+substitute for these roles; encrypted documents cannot be previewed in Content
+explorer. Use a supported client for actual protected-file access tests.
+
 ## Scanner Azure lab
 
 - An existing Azure resource group and a human-authorized target subscription/region. This repository does not deploy resources automatically.

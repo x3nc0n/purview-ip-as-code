@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Clarifies BES demo access across the runbooks, architecture, prerequisites and verifier help: SharePoint/OneDrive auto-labeling gives the last modifier protection-owner rights, independently of BES membership; Global Administrator alone is not a decryption bypass. Documents separate owner/member/nonmember tests, RMS super-user exceptions, EXPORT rights, cached licenses and encrypted-preview limitations. No tenant permissions, memberships or encryption settings are changed.
+- Documents the exact high-confidence demo BCSI patterns, including the explicit marker's standalone match, and separates SIT matches, applied labels, encryption and actual reader-access evidence.
+
 - Enabled all four tenant-wide lab auto-label policies on explicit operator request on 2026-10-15, retaining `OverwriteLabel=False`. All 15 rules matched source and enabled modes were read back; distribution and actual cloud file-label writes remain asynchronous and unverified. Stable policy names still contain `(simulation)`; their live Mode is authoritative.
 
 - Expands the test tenant's cloud discovery scope to all SharePoint and OneDrive locations, including Teams channel files. Adds a tenant/ownership-checked, backup-first simulation restart script that refuses active policies, scheduled automatic enforcement and file-location exclusions. Exchange remains mail-in-transit evaluation, not a historical mailbox scan.

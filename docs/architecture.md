@@ -10,6 +10,29 @@ The optional scanner is a separate discovery-only adapter. Its Bicep modules cre
 
 The VM has no public IP. The extension verifies the bootstrap hash; bootstrap checks pinned SQL Express, VC++ runtime and client hashes/signatures, resumes after installer restart codes, and records distinct readiness fields. An idle node is not scan evidence: discovery completion requires fresh local reports covering every fixture with zero failures. Label conditions are managed through Security & Compliance `Set-Label -Conditions`, not scanner cmdlets. Container scopes and protections are independent from file encryption; enforcement readiness still requires native detector and manual-label behavior evidence.
 
+## File-access and protection-identity boundaries
+
+Detection, labeling, encryption and reader authorization are separate stages.
+The BES fixed-group grant is `VIEW, EDIT, PRINT, EXPORT`; it does not eliminate
+Rights Management owner/issuer or authorized RMS super-user rights. `EXPORT`
+allows an authorized recipient to remove protection. The adapter does not
+explicitly set `DisableAutomaticOwnerRights`; the lab's observed live value was
+False. Do not describe BES as "only group members can ever open this file."
+
+For SharePoint/OneDrive service auto-labeling, the file's last modifier becomes
+the Rights Management owner/issuer. Uploading all samples as the administrator
+can therefore give that account owner access independently of BES membership.
+Global Administrator is not itself an automatic decryption privilege. Storage
+ACLs/site roles, container privacy, publishing audience and encryption grants
+are distinct: none proves the others.
+
+Scanner SMB access uses the Windows/AD service account; MIP authentication uses
+the delegated cloud context. Neither the VM managed identity nor filesystem
+ownership establishes the protected file's Rights Management owner. Inspect
+actual file protection and test allowed and denied readers in separate sessions;
+metadata-only verifier success is not an authorization test. See the
+[access demo runbook](operations.md#bes-access-demo-owner-rights-and-denial-tests).
+
 ## Trust and mutation boundaries
 
 - Pull-request CI runs offline schema, fixture, PowerShell, XML, and Bicep checks; it has read-only repository permissions and no Azure or Purview credential.

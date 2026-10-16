@@ -1,3 +1,14 @@
+<#
+.SYNOPSIS
+Verifies persisted scanner label and Rights Management protection metadata.
+.DESCRIPTION
+Does not test allowed-reader access, unauthorized-user denial, protection
+ownership or manual-label preservation. BES group rights coexist with owner
+and RMS super-user rights; EXPORT permits authorized removal of protection.
+Use the separate reader matrix in docs\operations.md before claiming access
+enforcement. SharePoint/OneDrive auto-labeling assigns protection ownership to
+the last modifier; do not use that uploader as the denied reader.
+#>
 [CmdletBinding()]
 param(
     [string]$ScanResultPath = 'C:\ProgramData\PurviewIPAsCode-AdLab\enforcement-result.json',

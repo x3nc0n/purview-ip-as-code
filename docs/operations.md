@@ -31,7 +31,7 @@ are asynchronous and can take days. Content explorer classification can lag
 separately. Simulation does not apply labels or guarantee immediate Activity
 explorer events. Exchange rules evaluate email in transit; restarting a
 simulation is not an on-demand historical scan of every mailbox. There is no
-single universal scan covering all Microsoft 365 asset types. and recovery
+single universal scan covering all Microsoft 365 asset types.
 
 ### Lab enforcement enabled on 2026-10-15
 
@@ -55,7 +55,128 @@ Confidential/Internal Only. Exchange 200+ retains Recipients Only / Do Not
 Forward. Matching files are processed asynchronously after policy distribution;
 activation read-back is not proof that the newly uploaded files already have
 persisted labels. Distribution was still Pending at activation. Benign no-match
-files should remain unlabeled. No blanket label was applied to the uploaded batch. and recovery
+files should remain unlabeled. No blanket label was applied to the uploaded batch.
+
+For historical SharePoint/OneDrive content, use **Information Protection >
+Classifiers > On-demand classification**. Review scope, classifiers, file dates
+and estimated charges, then select **Start classification** after estimation.
+This is not a simulation restart: refreshed classifications can trigger active
+labeling policies. Teams channel files are covered through SharePoint, not
+Teams chat messages or historical Exchange mail. Treat ODC results, persisted
+labels, encryption and user access as separate evidence.
+
+## BES access demo: owner rights and denial tests
+
+### Who can open a protected file?
+
+The BES label's fixed grant is the overlay's `bes-authorized` mail-enabled
+security group with `VIEW, EDIT, PRINT, EXPORT`. It is not a guarantee that every
+nonmember is denied: the **Rights Management owner/issuer** and authorized RMS
+super users have independent rights. For SharePoint/OneDrive service-side
+auto-labeling, Microsoft assigns owner/issuer to the account that last modified
+the file when protection is applied. This is not the site's owner, its group
+owner, the Windows file owner or simply whoever starts ODC.
+
+The administrator uploaded the cloud demo batch. A 2026-10-16 membership check
+found the BES group empty and the administrator absent from its transitive
+membership; the live label action had `disableautomaticownerrights=False`.
+That administrator opening a sample is consistent with protection-owner access,
+not proof of a group-access failure. The particular cloud file's encryption and
+owner metadata were not independently verified by that check. Membership and
+effective rights can change; recheck them for each demo. The adapter does not
+explicitly manage `DisableAutomaticOwnerRights`; inspect live settings rather
+than assuming a source-controlled value for that switch.
+
+Global Administrator status alone does not grant automatic decryption. RMS
+super-user configuration is a separate, privileged recovery mechanism; do not
+enable it or change group membership merely to make a test pass. A group grant
+also does not provide a SharePoint link or SMB read permission. Repository
+authorization and Rights Management authorization are separate gates.
+
+`EXPORT` permits an authorized BES recipient to remove protection; these are
+editable demo permissions, not a view-only or non-exportable design. Do not
+promise prevention of copying, printing or redistribution. Removing a user
+from the group is not a deterministic immediate-revocation test because cached
+use licenses, offline rights and existing unprotected copies can affect results.
+
+### Before presenting the demo
+
+Record the exact file URL, label GUID, encryption state, protection owner/issuer,
+last modifier, group membership, client identity and test time in private
+evidence. Last-modifier metadata is context, not proof of protection ownership
+after later edits. Use a supported client/protection inspection method to
+confirm the file's own protection state; label configuration alone is not enough.
+These read-only commands inspect group grants and live label actions after
+connecting to the target tenant's Exchange Online and Security & Compliance:
+
+```powershell
+$environment = Get-Content -LiteralPath 'config\environments\<tenant>.json' -Raw | ConvertFrom-Json
+$inventory = Get-Content -LiteralPath '<private-managed-inventory.json>' -Raw | ConvertFrom-Json
+$group = $environment.groups | Where-Object key -eq 'bes-authorized'
+Get-DistributionGroupMember -Identity $group.email -ResultSize Unlimited |
+    Select-Object DisplayName, PrimarySmtpAddress, RecipientType
+$bes = Get-Label -Identity $inventory.labels.'highly-confidential-bes'
+$bes.LabelActions | ForEach-Object { $_ | ConvertFrom-Json } |
+    Where-Object Type -eq 'encrypt' | Select-Object -ExpandProperty Settings
+```
+
+Group output shows direct members; resolve nested membership separately through
+Entra transitive membership. An empty group is not a usable allowed-reader setup.
+Review intended demo users with the operator before changing membership. Inspect
+`disabled`, `rightsdefinitions` and `disableautomaticownerrights` in label
+actions: individual `Encryption*` properties can be blank even when the serialized
+encryption action is configured. Do not interpret those blanks as encryption Off.
+
+### Access test matrix
+
+Use distinct, already-approved test accounts and the same protected document.
+Both reader accounts must have baseline access to the library/share; otherwise
+a storage-layer denial does not prove encryption enforcement. Neither reader
+may be the protection owner/issuer or an RMS super user. Do not use the uploader
+as the denied reader. Run each reader in a separate signed-in browser profile
+or clean supported Office client session and confirm the active account.
+
+| Identity | Expected result | What it demonstrates |
+| --- | --- | --- |
+| Uploader/last modifier, confirmed as protection owner | Can open despite no BES membership when owner rights apply | Owner exception, not a group test |
+| BES member, not protection owner or RMS super user | Can open with the configured rights after propagation | Positive group access |
+| Nonmember, not protection owner or RMS super user | Cannot decrypt/open protected content despite baseline repository access | Negative encryption access |
+
+First establish detection and persisted BES labeling/encryption; then attempt
+both reader opens. Record the actual result/error, not just the expected result.
+If an unauthorized open succeeds, check that the client opened the protected
+copy, not a pristine local fixture, and inspect owner/issuer, nested groups,
+explicit grants, RMS super-user status and cached sessions/licenses. If the
+allowed reader fails, distinguish repository permissions, membership propagation,
+client/network/Conditional Access failures and encryption authorization.
+Do not weaken protection or clear shared token caches to conceal a failure.
+
+`Test-ScannerLabelWrites.ps1` verifies label/protection metadata on the private
+scanner corpus; it does **not** perform this reader-access matrix. Scanner SMB
+access uses the AD service identity, while MIP protection uses the configured
+delegated cloud authentication context. Do not infer protection ownership from
+the NTFS owner, scanner Windows service account or Azure managed identity.
+Recheck identity-specific rights for scanner-protected files separately.
+
+`Reset-ScannerDemoFiles.ps1` only restores the private Azure Files fixtures. It
+does not reset the cloud demo batch, remove cloud labels or revoke owner rights.
+Recreating a cloud sample under the same uploader can recreate the same ownership
+exception. Active cloud policies can label new samples asynchronously.
+
+### Purview visibility is not a reader-access test
+
+Classifiers show definitions and matches, not a grant to decrypt. Content
+Explorer List Viewer and Content Viewer are separate roles; Global Administrator
+alone does not establish those viewing permissions. Content explorer cannot
+preview encrypted documents. A preview failure therefore does not establish
+that the BES group denied a user, and a classifier match does not prove a label
+or encryption was applied. Use the source file in a supported client for the
+reader tests, without removing protection to enable portal preview.
+
+References: [service-side auto-labeling and last-modifier ownership](https://learn.microsoft.com/en-us/purview/apply-sensitivity-label-automatically),
+[Rights Management owner/issuer and usage rights](https://learn.microsoft.com/en-us/purview/rights-management-usage-rights#rights-management-issuer-and-rights-management-owner),
+[RMS super users](https://learn.microsoft.com/en-us/purview/encryption-super-users),
+and [Content explorer permissions and encrypted previews](https://learn.microsoft.com/en-us/purview/data-classification-content-explorer).
 
 ## Local checks
 
@@ -222,7 +343,9 @@ requires the nine positive formats to have both a matching report label and
 persisted `Get-FileStatus` BES metadata with Rights Management protection.
 Discovery proposal counts are never accepted as label writes. Relabel/downgrade
 Off is a configuration safeguard, not proof that every manual-label scenario
-has been tested. Production accuracy and clean ARM redeployment remain separate.
+has been tested. It does not remove protection-owner rights or test whether a
+nonmember can decrypt; use the [BES access test matrix](#access-test-matrix).
+Production accuracy and clean ARM redeployment remain separate.
 
 ## Resetting the private Azure Files demo
 

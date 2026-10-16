@@ -2,9 +2,44 @@
 
 ## BCSI contextual detectors
 
-Three custom detectors cover a BCSI designation, network/security configuration, and access procedures. Each has 65, 75, and 85 confidence patterns; the high-confidence policy uses only 85. A short token, hostname, port, or procedure phrase alone is not sufficient: contextual regexes use bounded 300-character proximity and supporting evidence. The local test harness checks these deterministic fixtures only; it does not execute Microsoft's classifier.
+Three custom regex-based sensitive information types (SITs), not trainable AI
+classifiers, cover a BCSI designation, network/security configuration, and access
+procedures. Each has 65, 75, and 85 confidence patterns; the high-confidence
+policy uses only 85. The network and access patterns require supporting evidence
+within bounded 300-character proximity. The explicit 85 pattern is different:
+its structured marker alone is sufficient. The local test harness checks these
+deterministic fixtures only; it does not execute Microsoft's classifier.
+
+| SIT | Required at confidence 85 |
+| --- | --- |
+| BCSI Explicit Designation | `BCSI: INTERNAL DEMO DESIGNATION`, permitting `:` or `=` or `-` and flexible whitespace. No supporting handling statement is required at 85. |
+| BCSI Network and Security Configuration | Address beginning `192.0.2.`, `198.51.100.` or `203.0.113.`; nearby `BES`, `ESP` or `EACMS`; `firewall`, `subnet`, `topology`, `gateway` or `ACL`; and `deny`, `allow`, `ingress`, `egress` or `VLAN`. |
+| BCSI Access and Security Procedures | `operator access procedure` or `access control procedure`; nearby `BES`, `ESP` or `EACMS`; `badge`, `MFA`, `authentication`, `authorization` or `jump host`; and a match for `review\w*`, `approve\w*`, `revoke\w*`, `audit\w*` or `two-person`. |
+
+The exact expressions and case behavior are in `config\detection.json`. These
+are deliberately narrow demonstration rules, not general BCSI recognition:
+the explicit marker is invented and the network rule only covers documentation
+address ranges. The demo disclaimer does not suppress matches.
+
+For example, the cloud sample ending `b1-5-designation.docx` contains:
+
+```text
+BCSI: INTERNAL DEMO DESIGNATION
+Handling: BES Cyber System Information
+```
+
+The first line alone meets the 85 pattern. The second line is supporting
+evidence for its separate 75 pattern, not an additional 85 requirement. The
+filename does not cause detection. There is no inference of real infrastructure
+or legal BCSI status.
 
 Every high-confidence BCSI match targets Highly Confidential / BES. No separate "high impact" detector exists, no BCSI rule depends on SSN results, and no policy excludes a simultaneous BCSI/PII match.
+
+A SIT result is not a persisted label or an access-control result. Active
+policies can apply BES and encryption; simulation only reports proposed
+outcomes. Purview cannot preview encrypted content in Content explorer. Use the
+[BES access runbook](operations.md#bes-access-demo-owner-rights-and-denial-tests)
+to distinguish detection, protection-owner access and group-based reader tests.
 
 The access-procedure primary expression explicitly uses `(?i)` so title-case
 headings such as "Operator access procedure" match. Package version 1.0.0.1
